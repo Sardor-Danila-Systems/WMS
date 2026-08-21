@@ -3,7 +3,6 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import { AppShell } from "@/components/layout/app-shell";
 
 const geistSans = Inter({
   variable: "--font-geist-sans",
@@ -17,7 +16,7 @@ const geistMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "СтройСклад — WMS",
-  description: "Демо-версия системы управления складом строительных материалов",
+  description: "Система учёта строительных материалов на складе",
 };
 
 export default function RootLayout({
@@ -31,9 +30,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <TooltipProvider delay={200}>3
-          <AppShell>{children}</AppShell>
-          <Toaster position="top-right" />
+        <TooltipProvider delay={200}>
+          {children}
+          <Toaster position="top-right" richColors />
         </TooltipProvider>
       </body>
     </html>

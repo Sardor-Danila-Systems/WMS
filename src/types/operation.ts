@@ -1,6 +1,9 @@
-import type { Unit } from "./material";
-
-export type OperationType = "receipt" | "issue" | "return";
+/**
+ * Типы движения материала. Замкнутый цикл:
+ * RECEIPT (поставщик → склад) → ISSUE (склад → бригадир)
+ * → USAGE (бригадир → стройка) / RETURN (бригадир → склад).
+ */
+export type MovementType = "RECEIPT" | "ISSUE" | "USAGE" | "RETURN";
 
 export type ReturnReason =
   | "Излишек на объекте"
@@ -8,19 +11,37 @@ export type ReturnReason =
   | "Неверный материал"
   | "Отмена работ";
 
-export interface Operation {
+export interface StockMovement {
   id: string;
-  type: OperationType;
-  date: string;
+  type: MovementType;
+  occurredAt: string;
+  createdAt: string;
+
   materialId: string;
   materialName: string;
-  unit: Unit;
+  unit: string;
   quantity: number;
-  workerId: string;
-  /** Поставщик для поступления, бригадир для выдачи/возврата */
-  counterpartyId: string;
-  counterpartyName: string;
-  comment?: string;
-  vehicleNumber?: string;
-  reason?: ReturnReason;
+
+  /** Сотрудник склада, проводивший операцию. */
+  userId: string;
+  userName: string;
+
+  foremanId: string | null;
+  foremanName: string | null;
+  supplierId: string | null;
+  supplierName: string | null;
+  projectId: string | null;
+  projectName: string | null;
+
+  vehicleNumber: string;
+  reason: string;
+  comment: string;
+
+  /** Как операция изменила остаток склада: +q, -q или 0. */
+  warehouseDelta: number;
+  /** Как операция изменила остаток у бригадира. */
+  foremanDelta: number;
+  /** Остаток склада сразу после операции — «фотография» на момент записи. */
+  warehouseAfter: number;
+  foremanAfter: number | null;
 }

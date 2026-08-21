@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:seed": "node --no-warnings --import ./scripts/register-alias.mjs scripts/seed.ts",
+    "db:check": "node --no-warnings --import ./scripts/register-alias.mjs scripts/check.ts",
+    "test:e2e": "node --no-warnings --import ./scripts/register-alias.mjs scripts/test-flow.ts",
+    "typecheck": "tsc --noEmit",
+    "test:concurrency": "node --no-warnings --import ./scripts/register-alias.mjs scripts/test-concurrency.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -14,7 +19,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
-    "framer-motion": "^12.42.2",
     "lucide-react": "^1.23.0",
     "next": "16.2.10",
     "next-themes": "^0.4.6",
@@ -28,12 +32,11 @@
     "tailwind-merge": "^3.6.0",
     "tw-animate-css": "^1.4.0",
     "xlsx": "^0.18.5",
-    "zod": "^4.4.3",
-    "zustand": "^5.0.14"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^24.13.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

@@ -15,10 +15,16 @@ export type Unit = "т" | "м³" | "шт" | "кг" | "л" | "уп" | "м" | "м�
 export interface Material {
   id: string;
   name: string;
-  category: MaterialCategory;
-  unit: Unit;
+  category: string;
+  unit: string;
+  /** Остаток на складе. */
   quantity: number;
   minStock: number;
-  lastReceiptDate: string | null;
+  isActive: boolean;
   createdAt: string;
+  updatedAt: string;
+  /** Дата последнего поступления, вычисляется из журнала движений. */
+  lastReceiptDate: string | null;
+  /** Сколько всего этого материала сейчас на руках у бригадиров. */
+  atForemen: number;
 }

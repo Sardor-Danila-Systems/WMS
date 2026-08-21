@@ -23,3 +23,16 @@ export function formatNumber(value: number): string {
 export function formatQuantity(value: number, unit: string): string {
   return `${formatNumber(value)} ${unit}`;
 }
+
+/**
+ * Правильное окончание русского слова при числе:
+ * 1 позиция, 2 позиции, 5 позиций.
+ */
+export function declOf(count: number, one: string, few: string, many: string): string {
+  const mod100 = Math.abs(count) % 100;
+  const mod10 = mod100 % 10;
+  if (mod100 >= 11 && mod100 <= 14) return many;
+  if (mod10 === 1) return one;
+  if (mod10 >= 2 && mod10 <= 4) return few;
+  return many;
+}

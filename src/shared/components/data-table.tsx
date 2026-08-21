@@ -118,6 +118,7 @@ export function DataTable<T>({
                   )}
                 </TableHead>
               ))}
+              {onRowClick && <TableHead className="w-8" aria-hidden />}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -129,12 +130,13 @@ export function DataTable<T>({
                       <Skeleton className="h-4 w-full max-w-32" />
                     </TableCell>
                   ))}
+                  {onRowClick && <TableCell />}
                 </TableRow>
               ))}
 
             {!isLoading && pageRows.length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={columns.length} className="h-40 text-center">
+                <TableCell colSpan={columns.length + (onRowClick ? 1 : 0)} className="h-40 text-center">
                   <EmptyState message={emptyMessage} />
                 </TableCell>
               </TableRow>
@@ -145,13 +147,36 @@ export function DataTable<T>({
                 <TableRow
                   key={rowKey(row)}
                   onClick={() => onRowClick?.(row)}
-                  className={cn(onRowClick && "cursor-pointer")}
+                  // Строка-ссылка должна открываться и с клавиатуры, а не только мышью.
+                  tabIndex={onRowClick ? 0 : undefined}
+                  role={onRowClick ? "button" : undefined}
+                  onKeyDown={
+                    onRowClick
+                      ? (event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            onRowClick(row);
+                          }
+                        }
+                      : undefined
+                  }
+                  className={cn(
+                    onRowClick &&
+                      "group/row cursor-pointer outline-none focus-visible:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/40"
+                  )}
                 >
                   {columns.map((column) => (
                     <TableCell key={column.id} className={column.className}>
                       {column.accessor(row)}
                     </TableCell>
                   ))}
+                  {onRowClick && (
+                    <TableCell className="w-8 pr-3 text-right">
+                      {/* Подсказка, что строку можно открыть — иначе карточка
+                          материала или бригадира остаётся незамеченной. */}
+                      <ChevronRight className="ml-auto h-4 w-4 text-muted-foreground/40 transition-colors group-hover/row:text-foreground" />
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
           </TableBody>

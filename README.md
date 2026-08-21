@@ -1,36 +1,105 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# СтройСклад — WMS
 
-## Getting Started
+Система складского учёта строительных материалов: приём от поставщиков,
+выдача бригадирам, списание на объектах и возврат на склад — с полной
+историей движения каждой единицы материала.
 
-First, run the development server:
+## Запуск
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev          # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+База данных создаётся автоматически при первом запуске и наполняется
+демонстрационными данными. Отдельных шагов установки не требуется.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Учётные записи
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Логин   | Пароль     | Роль               |
+|---------|------------|--------------------|
+| `admin` | `admin123` | Администратор      |
+| `volkov`| `sklad123` | Работник склада    |
 
-## Learn More
+Остальные работники склада: `kovalev`, `petrov`, `orlov` (пароль `sklad123`).
 
-To learn more about Next.js, take a look at the following resources:
+> Перед передачей системы в работу смените пароли в разделе **Сотрудники**.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Как устроен учёт
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Материал проходит замкнутый цикл, и каждый шаг фиксируется в журнале движений:
 
-## Deploy on Vercel
+```
+Поставщик ──RECEIPT──▶ Склад ──ISSUE──▶ Бригадир ──USAGE──▶ Объект
+                         ▲                  │
+                         └─────RETURN───────┘
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Операция  | Остаток склада | Остаток бригадира |
+|-----------|----------------|-------------------|
+| `RECEIPT` | `+ количество` | —                 |
+| `ISSUE`   | `− количество` | `+ количество`    |
+| `USAGE`   | без изменений  | `− количество`    |
+| `RETURN`  | `+ количество` | `− количество`    |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Журнал движений первичен.** Таблица `stock_movements` только пополняется —
+записи никогда не изменяются и не удаляются. Остатки в `materials.quantity` и
+`foreman_stock.quantity` — производные значения, которые меняются исключительно
+в одной транзакции с записью движения. Поэтому в любой момент выполняется
+равенство:
+
+```
+остаток материала = СУММА(warehouse_delta) по всем его движениям
+```
+
+Проверить это можно командой `npm run db:check`.
+
+### Защита от некорректных данных
+
+Правила закреплены на трёх уровнях, а не только в интерфейсе:
+
+1. **Ограничения базы** — `CHECK (quantity > 0)`, `CHECK (quantity >= 0)` для
+   остатков, внешние ключи. Отрицательный остаток невозможен физически.
+2. **Транзакции** — операция выполняется в `BEGIN IMMEDIATE`, поэтому проверка
+   остатка и его изменение неделимы. Два одновременных пользователя не могут
+   выдать один и тот же материал дважды.
+3. **Серверная валидация** — каждый server action проверяет права доступа и
+   разбирает данные схемой Zod, независимо от проверок в браузере.
+
+## Команды
+
+| Команда                   | Назначение                                              |
+|---------------------------|---------------------------------------------------------|
+| `npm run dev`             | Запуск в режиме разработки                              |
+| `npm run build`           | Production-сборка                                       |
+| `npm run start`           | Запуск production-сборки                                |
+| `npm run typecheck`       | Проверка типов                                          |
+| `npm run lint`            | Проверка кода                                           |
+| `npm run db:seed`         | Заполнить базу (`-- --reset` — пересоздать заново)      |
+| `npm run db:check`        | Проверка целостности: сходятся ли остатки с журналом    |
+| `npm run test:e2e`        | Сквозной сценарий учёта и проверки на некорректные данные |
+| `npm run test:concurrency`| Проверка одновременной работы нескольких пользователей   |
+
+## Роли
+
+- **Администратор** — все операции, справочники, сотрудники, отчёты, настройки.
+- **Работник склада** — приём, выдача, списание, возврат, просмотр склада,
+  материалы, бригадиры и отчёты. Без доступа к сотрудникам и настройкам.
+
+## Технологии
+
+Next.js 16 (App Router, Server Actions) · React 19 · TypeScript · Tailwind CSS 4 ·
+SQLite через встроенный модуль Node.js `node:sqlite` — отдельный сервер базы
+данных не требуется.
+
+### Переменные окружения
+
+| Переменная    | По умолчанию   | Назначение                  |
+|---------------|----------------|-----------------------------|
+| `WMS_DB_PATH` | `data/wms.db`  | Путь к файлу базы данных    |
+
+## Выгрузка данных
+
+Отчёты и любые таблицы операций выгружаются в Excel (`.xlsx`) и CSV из реальных
+данных. Структура журнала движений (тип операции, материал, количество,
+контрагент, объект, дата) готова для последующей передачи в 1С.

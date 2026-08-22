@@ -80,7 +80,9 @@
     "accessNote": "Kirish huquqini ombor administratori beradi",
     "invalidCredentials": "Login yoki parol noto'g'ri",
     "accountDisabled": "Hisob o'chirilgan. Administratorga murojaat qiling.",
-    "emptyDatabase": "Ma'lumotlar bazasi bo'sh — birorta ham hisob yaratilmagan. Serverda «npm run db:seed» buyrug'ini bajaring."
+    "emptyDatabase": "Ma'lumotlar bazasi bo'sh — birorta ham hisob yaratilmagan. Serverda «npm run db:seed» buyrug'ini bajaring.",
+    "showPassword": "Parolni ko'rsatish",
+    "hidePassword": "Parolni yashirish"
   },
   "roles": {
     "ADMIN": "Administrator",

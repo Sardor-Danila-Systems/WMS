@@ -85,9 +85,22 @@ npm run dev                    # http://localhost:3000
 | `npm run db:studio`       | Prisma Studio — просмотр данных в браузере              |
 | `npm run db:seed`         | Заполнить базу (`-- --reset` — пересоздать заново)      |
 | `npm run db:create-admin` | Создать администратора: `-- <логин> <пароль> "<ФИО>"`   |
+| `npm run db:reset`        | **Удалить все данные** и создать одного администратора  |
 | `npm run db:check`        | Проверка целостности: сходятся ли остатки с журналом    |
 | `npm run test:e2e`        | Сквозной сценарий учёта и проверки на некорректные данные |
 | `npm run test:concurrency`| Проверка одновременной работы нескольких пользователей   |
+
+## Руководство пользователя
+
+Готовые PDF для передачи заказчику — в папке [`docs/`](docs/):
+
+| Файл | Язык |
+|------|------|
+| [Gagarin-Avenue-WMS-Rukovodstvo-RU.pdf](docs/Gagarin-Avenue-WMS-Rukovodstvo-RU.pdf) | Русский |
+| [Gagarin-Avenue-WMS-Qollanma-UZ.pdf](docs/Gagarin-Avenue-WMS-Qollanma-UZ.pdf) | O'zbekcha |
+
+17 страниц со скриншотами реальных экранов: вход, дашборд, все операции,
+карточки материала и бригадира, история, отчёты, роли и работа с телефона.
 
 ## Языки интерфейса
 

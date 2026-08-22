@@ -7,6 +7,7 @@ import { login, type LoginState } from "@/app/actions/auth";
 import { useT } from "@/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/shared/components/password-input";
 import { FormField } from "@/shared/components/form-field";
 
 export function LoginForm() {
@@ -31,10 +32,9 @@ export function LoginForm() {
       </FormField>
 
       <FormField label={t("auth.password")} htmlFor="password" required>
-        <Input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           autoComplete="current-password"
           required
           placeholder={t("auth.passwordPlaceholder")}

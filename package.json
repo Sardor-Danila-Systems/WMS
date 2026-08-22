@@ -16,7 +16,8 @@
     "db:create-admin": "node --no-warnings --env-file-if-exists=.env --import ./scripts/register-alias.mjs scripts/create-admin.ts",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:reset": "node --no-warnings --env-file-if-exists=.env --import ./scripts/register-alias.mjs scripts/reset.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

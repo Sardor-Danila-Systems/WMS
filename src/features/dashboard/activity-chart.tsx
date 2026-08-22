@@ -79,7 +79,7 @@ export function ActivityChart({ data }: { data: DailyActivity[] }) {
       <CardContent>
         <div className="h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} barGap={2} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
+            <BarChart data={data} barGap={2} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
               <XAxis
                 dataKey="day"
@@ -94,7 +94,7 @@ export function ActivityChart({ data }: { data: DailyActivity[] }) {
                 tickLine={false}
                 axisLine={false}
                 tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-                width={32}
+                width={28}
                 allowDecimals={false}
               />
               <Tooltip cursor={{ fill: "rgba(11,11,11,0.04)" }} content={<ActivityTooltip locale={locale} />} />

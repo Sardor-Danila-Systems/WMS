@@ -7,23 +7,26 @@ import { SESSION_COOKIE } from "@/lib/auth/constants";
  * без обращения к базе — proxy выполняется на каждый запрос, включая
  * предзагрузку страниц. Настоящая проверка прав живёт в `requireUser`
  * и в каждом server action, ближе к данным.
+ *
+ * Обратной переадресации «есть cookie → на дашборд» здесь намеренно нет.
+ * Proxy не может проверить, жива ли сессия, а слой приложения может — и если
+ * они расходятся (сессия истекла, пароль сменили, базу пересоздали), возникает
+ * бесконечный цикл: proxy шлёт на дашборд, дашборд шлёт обратно на вход.
+ * Решение о том, что пользователь уже вошёл, принимает страница входа,
+ * у которой есть доступ к базе.
  */
 const PUBLIC_PATHS = ["/login"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
   const isPublic = PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  if (isPublic) return NextResponse.next();
 
-  if (!hasSession && !isPublic) {
+  if (!request.cookies.get(SESSION_COOKIE)?.value) {
     const loginUrl = new URL("/login", request.nextUrl);
     // Запоминаем, куда пользователь шёл, чтобы вернуть его туда после входа.
     if (pathname !== "/") loginUrl.searchParams.set("from", pathname);
     return NextResponse.redirect(loginUrl);
-  }
-
-  if (hasSession && isPublic) {
-    return NextResponse.redirect(new URL("/", request.nextUrl));
   }
 
   return NextResponse.next();

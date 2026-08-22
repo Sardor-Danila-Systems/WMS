@@ -40,17 +40,26 @@ export default async function HistoryPage({
     from: periodToFrom(value("period")),
   };
 
-  const [t, movements] = await Promise.all([getT(), listMovements(filters)]);
+  // Все выборки независимы — запускаем параллельно. Последовательные await
+  // прямо в разметке складывались бы в четыре круга по сети до базы.
+  const [t, movements, materials, foremen, users, projects] = await Promise.all([
+    getT(),
+    listMovements(filters),
+    listMaterials({ includeArchived: true }),
+    listForemen({ includeInactive: true }),
+    listUsers({ includeInactive: true }),
+    listProjects({ includeInactive: true }),
+  ]);
 
   return (
     <div className="space-y-5">
       <PageHeader title={t("history.title")} description={t("history.subtitle")} />
 
       <HistoryFilters
-        materials={await listMaterials({ includeArchived: true })}
-        foremen={await listForemen({ includeInactive: true })}
-        users={await listUsers({ includeInactive: true })}
-        projects={await listProjects({ includeInactive: true })}
+        materials={materials}
+        foremen={foremen}
+        users={users}
+        projects={projects}
         current={{
           type: value("type"),
           materialId: value("materialId"),

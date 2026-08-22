@@ -1,5 +1,7 @@
 import "@/lib/server-only";
 
+import { cache } from "react";
+
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db/client";
 import { getStockStatus } from "@/constants/colors";
@@ -15,6 +17,11 @@ import type {
 } from "@/types";
 
 /**
+ * Справочники обёрнуты в `cache()`: за один проход рендера их запрашивают
+ * несколько компонентов сразу (например, дашборд и формы операций), и без
+ * этого один и тот же список материалов уезжал бы в базу дважды. До облачной
+ * базы каждый лишний запрос — это ещё один круг по сети.
+ *
  * Простые выборки идут через модели Prisma, сводные отчёты — через $queryRaw:
  * агрегаты вида «сумма по типу операции в разрезе материала» в SQL выражаются
  * одним запросом, а через конструктор запросов превратились бы в несколько
@@ -57,7 +64,7 @@ function mapMaterial(row: MaterialAggregateRow): Material {
   };
 }
 
-export async function listMaterials(options?: { includeArchived?: boolean }): Promise<Material[]> {
+export const listMaterials = cache(async function listMaterials(options?: { includeArchived?: boolean }): Promise<Material[]> {
   const rows = await db.$queryRaw<MaterialAggregateRow[]>`
     SELECT m.*,
            (SELECT MAX(occurred_at) FROM stock_movements
@@ -68,7 +75,7 @@ export async function listMaterials(options?: { includeArchived?: boolean }): Pr
      ORDER BY lower(m.name)
   `;
   return rows.map(mapMaterial);
-}
+});
 
 export async function getMaterial(id: string): Promise<Material | null> {
   const rows = await db.$queryRaw<MaterialAggregateRow[]>`
@@ -204,14 +211,14 @@ function mapForeman(row: ForemanWithProject): Foreman {
   };
 }
 
-export async function listForemen(options?: { includeInactive?: boolean }): Promise<Foreman[]> {
+export const listForemen = cache(async function listForemen(options?: { includeInactive?: boolean }): Promise<Foreman[]> {
   const rows = await db.foreman.findMany({
     where: options?.includeInactive ? undefined : { isActive: true },
     include: { project: { select: { name: true } } },
     orderBy: { name: "asc" },
   });
   return rows.map(mapForeman);
-}
+});
 
 export async function getForeman(id: string): Promise<Foreman | null> {
   const row = await db.foreman.findUnique({
@@ -282,7 +289,7 @@ export interface ForemanSummary {
   lastOperationAt: string | null;
 }
 
-export async function getForemenSummaries(): Promise<Map<string, ForemanSummary>> {
+export const getForemenSummaries = cache(async function getForemenSummaries(): Promise<Map<string, ForemanSummary>> {
   const rows = await db.$queryRaw<
     (Omit<ForemanSummary, "lastOperationAt"> & { lastOperationAt: Date | null })[]
   >`
@@ -300,13 +307,13 @@ export async function getForemenSummaries(): Promise<Map<string, ForemanSummary>
       { ...r, lastOperationAt: r.lastOperationAt ? iso(r.lastOperationAt) : null },
     ])
   );
-}
+});
 
 /* ------------------------------------------------------------------ */
 /* Справочники                                                         */
 /* ------------------------------------------------------------------ */
 
-export async function listProjects(options?: { includeInactive?: boolean }): Promise<Project[]> {
+export const listProjects = cache(async function listProjects(options?: { includeInactive?: boolean }): Promise<Project[]> {
   const rows = await db.project.findMany({
     where: options?.includeInactive ? undefined : { isActive: true },
     orderBy: { name: "asc" },
@@ -318,9 +325,9 @@ export async function listProjects(options?: { includeInactive?: boolean }): Pro
     isActive: r.isActive,
     createdAt: iso(r.createdAt),
   }));
-}
+});
 
-export async function listSuppliers(options?: { includeInactive?: boolean }): Promise<Supplier[]> {
+export const listSuppliers = cache(async function listSuppliers(options?: { includeInactive?: boolean }): Promise<Supplier[]> {
   const rows = await db.supplier.findMany({
     where: options?.includeInactive ? undefined : { isActive: true },
     orderBy: { name: "asc" },
@@ -332,9 +339,9 @@ export async function listSuppliers(options?: { includeInactive?: boolean }): Pr
     isActive: r.isActive,
     createdAt: iso(r.createdAt),
   }));
-}
+});
 
-export async function listUsers(options?: { includeInactive?: boolean }): Promise<User[]> {
+export const listUsers = cache(async function listUsers(options?: { includeInactive?: boolean }): Promise<User[]> {
   const rows = await db.user.findMany({
     where: options?.includeInactive ? undefined : { isActive: true },
     orderBy: { fullName: "asc" },
@@ -349,13 +356,13 @@ export async function listUsers(options?: { includeInactive?: boolean }): Promis
     isActive: r.isActive,
     createdAt: iso(r.createdAt),
   }));
-}
+});
 
 /** Сколько операций провёл каждый сотрудник — для таблицы сотрудников. */
-export async function getUserOperationCounts(): Promise<Map<string, number>> {
+export const getUserOperationCounts = cache(async function getUserOperationCounts(): Promise<Map<string, number>> {
   const rows = await db.stockMovement.groupBy({ by: ["userId"], _count: { _all: true } });
   return new Map(rows.map((r) => [r.userId, r._count._all]));
-}
+});
 
 /* ------------------------------------------------------------------ */
 /* Дашборд                                                             */
@@ -595,7 +602,7 @@ export interface ProjectSummary {
   lastOperationAt: string | null;
 }
 
-export async function getProjectSummaries(): Promise<Map<string, ProjectSummary>> {
+export const getProjectSummaries = cache(async function getProjectSummaries(): Promise<Map<string, ProjectSummary>> {
   const rows = await db.$queryRaw<
     (Omit<ProjectSummary, "lastOperationAt"> & { lastOperationAt: Date | null })[]
   >`
@@ -614,7 +621,7 @@ export async function getProjectSummaries(): Promise<Map<string, ProjectSummary>
       { ...r, lastOperationAt: r.lastOperationAt ? iso(r.lastOperationAt) : null },
     ])
   );
-}
+});
 
 export async function getProject(id: string): Promise<Project | null> {
   const row = await db.project.findUnique({ where: { id } });

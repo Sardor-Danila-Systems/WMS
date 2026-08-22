@@ -1,5 +1,8 @@
+import { redirect } from "next/navigation";
+
 import { LanguageSwitch } from "@/components/layout/language-switch";
 import { LoginForm } from "@/features/auth/login-form";
+import { getSessionUser } from "@/lib/auth/session";
 import { getT } from "@/i18n/server";
 
 export const metadata = {
@@ -7,6 +10,11 @@ export const metadata = {
 };
 
 export default async function LoginPage() {
+  // Решение «пользователь уже вошёл» принимается здесь, а не в proxy:
+  // только тут можно проверить, существует ли сессия в базе. Просроченный
+  // cookie просто покажет форму входа вместо цикла переадресаций.
+  if (await getSessionUser()) redirect("/");
+
   const t = await getT();
 
   return (

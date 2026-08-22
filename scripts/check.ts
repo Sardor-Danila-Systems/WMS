@@ -1,21 +1,21 @@
 /** Проверка целостности базы: сходятся ли остатки с журналом движений. */
-import { queryAll, queryOne } from "@/lib/db/client";
+import { getPool, queryAll, queryOne } from "@/lib/db/client";
 import { verifyLedgerConsistency } from "@/server/movements";
 import { describeDatabase } from "@/lib/db/seed";
 
 console.log("Содержимое базы:");
-console.table(describeDatabase());
+console.table(await describeDatabase());
 
 console.log("\nДвижения по типам:");
 console.table(
-  queryAll<{ type: string; count: number; total: number }>(
-    "SELECT type, COUNT(*) AS count, ROUND(SUM(quantity), 1) AS total FROM stock_movements GROUP BY type"
+  await queryAll<{ type: string; count: number; total: number }>(
+    "SELECT type, COUNT(*)::int AS count, ROUND(SUM(quantity)::numeric, 1)::float8 AS total FROM stock_movements GROUP BY type ORDER BY type"
   )
 );
 
 console.log("\nМатериалы на руках у бригадиров (топ-8):");
 console.table(
-  queryAll<Record<string, unknown>>(
+  await queryAll<Record<string, unknown>>(
     `SELECT f.name AS foreman, m.name AS material, fs.quantity, m.unit
        FROM foreman_stock fs
        JOIN foremen f ON f.id = fs.foreman_id
@@ -25,11 +25,11 @@ console.table(
   )
 );
 
-const negativeStock = queryOne<{ c: number }>("SELECT COUNT(*) AS c FROM materials WHERE quantity < 0");
-const negativeForeman = queryOne<{ c: number }>("SELECT COUNT(*) AS c FROM foreman_stock WHERE quantity < 0");
-const badQty = queryOne<{ c: number }>("SELECT COUNT(*) AS c FROM stock_movements WHERE quantity <= 0");
+const negativeStock = await queryOne<{ c: number }>("SELECT COUNT(*)::int AS c FROM materials WHERE quantity < 0");
+const negativeForeman = await queryOne<{ c: number }>("SELECT COUNT(*)::int AS c FROM foreman_stock WHERE quantity < 0");
+const badQty = await queryOne<{ c: number }>("SELECT COUNT(*)::int AS c FROM stock_movements WHERE quantity <= 0");
 
-const consistency = verifyLedgerConsistency();
+const consistency = await verifyLedgerConsistency();
 
 console.log("\nПроверки целостности:");
 console.table([
@@ -47,4 +47,5 @@ const ok =
   consistency.ok;
 
 console.log(ok ? "\n✓ База целостна." : "\n✗ Найдены нарушения целостности.");
+await getPool().end();
 process.exit(ok ? 0 : 1);

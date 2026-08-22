@@ -22,6 +22,8 @@ export interface CreateMaterialInput {
   initialQuantity: number;
   /** Кто заводит материал — попадёт в движение «начальный остаток». */
   userId: string;
+  /** Текст комментария к движению начального остатка на языке пользователя. */
+  initialStockComment: string;
 }
 
 /**
@@ -29,18 +31,18 @@ export interface CreateMaterialInput {
  * он оформляется полноценным движением RECEIPT, поэтому равенство
  * «остаток = сумма движений» выполняется с самого первого дня жизни материала.
  */
-export function createMaterial(input: CreateMaterialInput): { id: string } {
-  return transaction(() => {
-    const existing = queryOne<{ id: string }>(
-      "SELECT id FROM materials WHERE LOWER(name) = LOWER(?)",
+export async function createMaterial(input: CreateMaterialInput): Promise<{ id: string }> {
+  return transaction(async (tx) => {
+    const existing = await tx.one<{ id: string }>(
+      "SELECT id FROM materials WHERE lower(name) = lower(?)",
       input.name
     );
-    if (existing) throw new BusinessError("Материал с таким названием уже есть", "name");
+    if (existing) throw new BusinessError("MATERIAL_NAME_EXISTS", { field: "name" });
 
     const id = randomUUID();
     const now = new Date().toISOString();
 
-    execute(
+    await tx.run(
       `INSERT INTO materials (id, name, category, unit, quantity, min_stock, is_active, created_at, updated_at)
        VALUES (?, ?, ?, ?, 0, ?, 1, ?, ?)`,
       id,
@@ -54,13 +56,13 @@ export function createMaterial(input: CreateMaterialInput): { id: string } {
 
     const initial = roundQty(input.initialQuantity);
     if (initial > 0) {
-      recordMovementInTx({
+      await recordMovementInTx(tx, {
         type: "RECEIPT",
         materialId: id,
         quantity: initial,
         userId: input.userId,
         occurredAt: now,
-        comment: "Начальный остаток при заведении материала",
+        comment: input.initialStockComment,
       });
     }
 
@@ -68,30 +70,30 @@ export function createMaterial(input: CreateMaterialInput): { id: string } {
   });
 }
 
-export function updateMaterial(
+export async function updateMaterial(
   id: string,
   input: { name: string; category: string; unit: string; minStock: number }
-): void {
-  const material = queryOne<{ id: string; unit: string }>("SELECT id, unit FROM materials WHERE id = ?", id);
-  if (!material) throw new BusinessError("Материал не найден");
+): Promise<void> {
+  const material = await queryOne<{ id: string; unit: string }>(
+    "SELECT id, unit FROM materials WHERE id = ?",
+    id
+  );
+  if (!material) throw new BusinessError("MATERIAL_NOT_FOUND");
 
-  const duplicate = queryOne<{ id: string }>(
-    "SELECT id FROM materials WHERE LOWER(name) = LOWER(?) AND id <> ?",
+  const duplicate = await queryOne<{ id: string }>(
+    "SELECT id FROM materials WHERE lower(name) = lower(?) AND id <> ?",
     input.name,
     id
   );
-  if (duplicate) throw new BusinessError("Материал с таким названием уже есть", "name");
+  if (duplicate) throw new BusinessError("MATERIAL_NAME_EXISTS", { field: "name" });
 
   // Единица измерения задаёт смысл всех прошлых чисел в журнале —
   // менять её после первой операции значит задним числом переписать историю.
-  if (input.unit !== material.unit && countMaterialMovements(id) > 0) {
-    throw new BusinessError(
-      "Нельзя изменить единицу измерения: по материалу уже есть движения",
-      "unit"
-    );
+  if (input.unit !== material.unit && (await countMaterialMovements(id)) > 0) {
+    throw new BusinessError("UNIT_LOCKED", { field: "unit" });
   }
 
-  execute(
+  await execute(
     "UPDATE materials SET name = ?, category = ?, unit = ?, min_stock = ?, updated_at = ? WHERE id = ?",
     input.name,
     input.category,
@@ -106,41 +108,51 @@ export function updateMaterial(
  * Удаляет материал только если по нему нет ни одного движения.
  * Материал с историей архивируется — так история операций не теряется.
  */
-export function deleteMaterial(id: string): { archived: boolean } {
-  return transaction(() => {
-    const material = queryOne<{ id: string; quantity: number }>(
+export async function deleteMaterial(id: string): Promise<{ archived: boolean }> {
+  return transaction(async (tx) => {
+    const material = await tx.one<{ id: string; quantity: number }>(
       "SELECT id, quantity FROM materials WHERE id = ?",
       id
     );
-    if (!material) throw new BusinessError("Материал не найден");
+    if (!material) throw new BusinessError("MATERIAL_NOT_FOUND");
 
-    if (countMaterialMovements(id) > 0) {
-      throw new BusinessError(
-        "Материал участвует в истории движений — его нельзя удалить. Используйте архивирование."
-      );
+    const movements = await tx.one<{ c: number }>(
+      "SELECT COUNT(*)::int AS c FROM stock_movements WHERE material_id = ?",
+      id
+    );
+    if ((movements?.c ?? 0) > 0) {
+      throw new BusinessError("MATERIAL_HAS_HISTORY");
     }
 
-    const atForemen = queryOne<{ c: number }>(
-      "SELECT COUNT(*) AS c FROM foreman_stock WHERE material_id = ? AND quantity > 0",
+    const atForemen = await tx.one<{ c: number }>(
+      "SELECT COUNT(*)::int AS c FROM foreman_stock WHERE material_id = ? AND quantity > 0",
       id
     );
     if ((atForemen?.c ?? 0) > 0) {
-      throw new BusinessError("Материал числится на руках у бригадиров — удаление запрещено");
+      throw new BusinessError("MATERIAL_AT_FOREMEN");
     }
 
-    execute("DELETE FROM foreman_stock WHERE material_id = ?", id);
-    execute("DELETE FROM materials WHERE id = ?", id);
+    await tx.run("DELETE FROM foreman_stock WHERE material_id = ?", id);
+    await tx.run("DELETE FROM materials WHERE id = ?", id);
     return { archived: false };
   });
 }
 
-export function setMaterialArchived(id: string, archived: boolean): void {
-  const material = queryOne<{ quantity: number }>("SELECT quantity FROM materials WHERE id = ?", id);
-  if (!material) throw new BusinessError("Материал не найден");
+export async function setMaterialArchived(id: string, archived: boolean): Promise<void> {
+  const material = await queryOne<{ quantity: number }>(
+    "SELECT quantity FROM materials WHERE id = ?",
+    id
+  );
+  if (!material) throw new BusinessError("MATERIAL_NOT_FOUND");
   if (archived && material.quantity > 0) {
-    throw new BusinessError("Нельзя архивировать материал с ненулевым остатком на складе");
+    throw new BusinessError("MATERIAL_STOCK_NOT_ZERO");
   }
-  execute("UPDATE materials SET is_active = ?, updated_at = ? WHERE id = ?", archived ? 0 : 1, new Date().toISOString(), id);
+  await execute(
+    "UPDATE materials SET is_active = ?, updated_at = ? WHERE id = ?",
+    archived ? 0 : 1,
+    new Date().toISOString(),
+    id
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -155,9 +167,9 @@ export interface ForemanInput {
   isActive: boolean;
 }
 
-export function createForeman(input: ForemanInput): { id: string } {
+export async function createForeman(input: ForemanInput): Promise<{ id: string }> {
   const id = randomUUID();
-  execute(
+  await execute(
     `INSERT INTO foremen (id, name, phone, brigade, project_id, is_active, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     id,
@@ -171,23 +183,21 @@ export function createForeman(input: ForemanInput): { id: string } {
   return { id };
 }
 
-export function updateForeman(id: string, input: ForemanInput): void {
-  const foreman = queryOne<{ id: string }>("SELECT id FROM foremen WHERE id = ?", id);
-  if (!foreman) throw new BusinessError("Бригадир не найден");
+export async function updateForeman(id: string, input: ForemanInput): Promise<void> {
+  const foreman = await queryOne<{ id: string }>("SELECT id FROM foremen WHERE id = ?", id);
+  if (!foreman) throw new BusinessError("FOREMAN_NOT_FOUND");
 
   if (!input.isActive) {
-    const held = queryOne<{ c: number }>(
-      "SELECT COUNT(*) AS c FROM foreman_stock WHERE foreman_id = ? AND quantity > 0",
+    const held = await queryOne<{ c: number }>(
+      "SELECT COUNT(*)::int AS c FROM foreman_stock WHERE foreman_id = ? AND quantity > 0",
       id
     );
     if ((held?.c ?? 0) > 0) {
-      throw new BusinessError(
-        "У бригадира есть материалы на руках — сначала оформите использование или возврат"
-      );
+      throw new BusinessError("FOREMAN_HAS_STOCK");
     }
   }
 
-  execute(
+  await execute(
     "UPDATE foremen SET name = ?, phone = ?, brigade = ?, project_id = ?, is_active = ? WHERE id = ?",
     input.name,
     input.phone,
@@ -202,9 +212,13 @@ export function updateForeman(id: string, input: ForemanInput): void {
 /* Объекты и поставщики                                                */
 /* ------------------------------------------------------------------ */
 
-export function createProject(input: { name: string; address: string; isActive: boolean }): { id: string } {
+export async function createProject(input: {
+  name: string;
+  address: string;
+  isActive: boolean;
+}): Promise<{ id: string }> {
   const id = randomUUID();
-  execute(
+  await execute(
     "INSERT INTO projects (id, name, address, is_active, created_at) VALUES (?, ?, ?, ?, ?)",
     id,
     input.name,
@@ -215,23 +229,27 @@ export function createProject(input: { name: string; address: string; isActive: 
   return { id };
 }
 
-export function updateProject(
+export async function updateProject(
   id: string,
   input: { name: string; address: string; isActive: boolean }
-): void {
-  const changed = execute(
+): Promise<void> {
+  const changed = await execute(
     "UPDATE projects SET name = ?, address = ?, is_active = ? WHERE id = ?",
     input.name,
     input.address,
     input.isActive ? 1 : 0,
     id
   );
-  if (changed.changes === 0) throw new BusinessError("Объект не найден");
+  if (changed.changes === 0) throw new BusinessError("PROJECT_NOT_FOUND");
 }
 
-export function createSupplier(input: { name: string; contact: string; isActive: boolean }): { id: string } {
+export async function createSupplier(input: {
+  name: string;
+  contact: string;
+  isActive: boolean;
+}): Promise<{ id: string }> {
   const id = randomUUID();
-  execute(
+  await execute(
     "INSERT INTO suppliers (id, name, contact, is_active, created_at) VALUES (?, ?, ?, ?, ?)",
     id,
     input.name,
@@ -242,18 +260,18 @@ export function createSupplier(input: { name: string; contact: string; isActive:
   return { id };
 }
 
-export function updateSupplier(
+export async function updateSupplier(
   id: string,
   input: { name: string; contact: string; isActive: boolean }
-): void {
-  const changed = execute(
+): Promise<void> {
+  const changed = await execute(
     "UPDATE suppliers SET name = ?, contact = ?, is_active = ? WHERE id = ?",
     input.name,
     input.contact,
     input.isActive ? 1 : 0,
     id
   );
-  if (changed.changes === 0) throw new BusinessError("Поставщик не найден");
+  if (changed.changes === 0) throw new BusinessError("SUPPLIER_NOT_FOUND");
 }
 
 /* ------------------------------------------------------------------ */
@@ -269,15 +287,15 @@ export interface CreateUserInput {
   password: string;
 }
 
-export function createUser(input: CreateUserInput): { id: string } {
-  const existing = queryOne<{ id: string }>(
-    "SELECT id FROM users WHERE LOWER(username) = LOWER(?)",
+export async function createUser(input: CreateUserInput): Promise<{ id: string }> {
+  const existing = await queryOne<{ id: string }>(
+    "SELECT id FROM users WHERE lower(username) = lower(?)",
     input.username
   );
-  if (existing) throw new BusinessError("Такой логин уже занят", "username");
+  if (existing) throw new BusinessError("USERNAME_TAKEN", { field: "username" });
 
   const id = randomUUID();
-  execute(
+  await execute(
     `INSERT INTO users (id, username, password_hash, full_name, position, phone, role, is_active, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
     id,
@@ -292,25 +310,35 @@ export function createUser(input: CreateUserInput): { id: string } {
   return { id };
 }
 
-export function updateUser(
+export async function updateUser(
   id: string,
-  input: { fullName: string; position: string; phone: string; role: Role; isActive: boolean; password?: string }
-): void {
-  const user = queryOne<{ id: string; role: Role }>("SELECT id, role FROM users WHERE id = ?", id);
-  if (!user) throw new BusinessError("Сотрудник не найден");
+  input: {
+    fullName: string;
+    position: string;
+    phone: string;
+    role: Role;
+    isActive: boolean;
+    password?: string;
+  }
+): Promise<void> {
+  const user = await queryOne<{ id: string; role: Role }>(
+    "SELECT id, role FROM users WHERE id = ?",
+    id
+  );
+  if (!user) throw new BusinessError("USER_NOT_FOUND");
 
   // Система без администратора становится неуправляемой.
   if (user.role === "ADMIN" && (input.role !== "ADMIN" || !input.isActive)) {
-    const admins = queryOne<{ c: number }>(
-      "SELECT COUNT(*) AS c FROM users WHERE role = 'ADMIN' AND is_active = 1 AND id <> ?",
+    const admins = await queryOne<{ c: number }>(
+      "SELECT COUNT(*)::int AS c FROM users WHERE role = 'ADMIN' AND is_active = 1 AND id <> ?",
       id
     );
     if ((admins?.c ?? 0) === 0) {
-      throw new BusinessError("Это последний активный администратор — роль нельзя понизить");
+      throw new BusinessError("LAST_ADMIN");
     }
   }
 
-  execute(
+  await execute(
     "UPDATE users SET full_name = ?, position = ?, phone = ?, role = ?, is_active = ? WHERE id = ?",
     input.fullName,
     input.position,
@@ -321,9 +349,9 @@ export function updateUser(
   );
 
   if (input.password) {
-    execute("UPDATE users SET password_hash = ? WHERE id = ?", hashPassword(input.password), id);
+    await execute("UPDATE users SET password_hash = ? WHERE id = ?", hashPassword(input.password), id);
     // Смена пароля должна выкидывать все прежние сессии этого пользователя.
-    execute("DELETE FROM sessions WHERE user_id = ?", id);
+    await execute("DELETE FROM sessions WHERE user_id = ?", id);
   }
 }
 
@@ -331,12 +359,13 @@ export function updateUser(
 /* Настройки                                                           */
 /* ------------------------------------------------------------------ */
 
-export function getSetting(key: string, fallback = ""): string {
-  return queryOne<{ value: string }>("SELECT value FROM settings WHERE key = ?", key)?.value ?? fallback;
+export async function getSetting(key: string, fallback = ""): Promise<string> {
+  const row = await queryOne<{ value: string }>("SELECT value FROM settings WHERE key = ?", key);
+  return row?.value ?? fallback;
 }
 
-export function setSetting(key: string, value: string): void {
-  execute(
+export async function setSetting(key: string, value: string): Promise<void> {
+  await execute(
     "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
     key,
     value

@@ -9,12 +9,14 @@ interface EmptyStateProps {
 
 export function EmptyState({ message, description, icon: Icon = Inbox }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-        <Icon className="h-5 w-5 text-muted-foreground" />
+    <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
+      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
+        <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
-      <p className="text-sm font-medium text-foreground">{message}</p>
-      {description && <p className="max-w-xs text-xs text-muted-foreground">{description}</p>}
+      <p className="text-[13px] font-medium text-foreground">{message}</p>
+      {description && (
+        <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">{description}</p>
+      )}
     </div>
   );
 }

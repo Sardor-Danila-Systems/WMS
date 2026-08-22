@@ -3,10 +3,11 @@
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatQuantity } from "@/lib/format";
+import { formatLongDate, formatQuantity } from "@/lib/format";
+import { useI18n } from "@/i18n/client";
 import type { BalancePoint } from "@/server/queries";
 
-const LINE_COLOR = "#2a78d6";
+const LINE_COLOR = "#2563a8";
 
 function shortDate(day: string): string {
   const [, month, date] = day.split("-");
@@ -17,22 +18,26 @@ function BalanceTooltip({
   active,
   payload,
   unit,
+  label,
+  locale,
 }: {
   active?: boolean;
   payload?: { payload: BalancePoint }[];
   unit: string;
+  label: string;
+  locale: Parameters<typeof formatQuantity>[2];
 }) {
   if (!active || !payload?.length) return null;
   const point = payload[0].payload;
   return (
-    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
+    <div className="rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-sm">
       <div className="mb-1 font-medium text-popover-foreground">
-        {new Date(point.day).toLocaleDateString("ru-RU", { day: "2-digit", month: "long" })}
+        {formatLongDate(point.day, locale)}
       </div>
       <div className="text-muted-foreground">
-        Остаток:{" "}
+        {label}:{" "}
         <span className="font-medium tabular-nums text-popover-foreground">
-          {formatQuantity(point.balance, unit)}
+          {formatQuantity(point.balance, unit, locale)}
         </span>
       </div>
     </div>
@@ -40,10 +45,11 @@ function BalanceTooltip({
 }
 
 export function MaterialBalanceChart({ data, unit }: { data: BalancePoint[]; unit: string }) {
+  const { t, locale } = useI18n();
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm font-semibold">Остаток на складе за 30 дней</CardTitle>
+        <CardTitle className="text-[13px] font-semibold">{t.materials.detail.balanceChart}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="h-56 w-full">
@@ -55,23 +61,23 @@ export function MaterialBalanceChart({ data, unit }: { data: BalancePoint[]; uni
                   <stop offset="100%" stopColor={LINE_COLOR} stopOpacity={0.01} />
                 </linearGradient>
               </defs>
-              <CartesianGrid vertical={false} stroke="#e1e0d9" strokeDasharray="3 3" />
+              <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
               <XAxis
                 dataKey="day"
                 tickFormatter={shortDate}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fill: "#898781", fontSize: 11 }}
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                 interval="preserveStartEnd"
                 minTickGap={24}
               />
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tick={{ fill: "#898781", fontSize: 11 }}
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                 width={44}
               />
-              <Tooltip content={<BalanceTooltip unit={unit} />} />
+              <Tooltip content={<BalanceTooltip unit={unit} label={t.materials.detail.balanceTooltip} locale={locale} />} />
               <Area
                 type="monotone"
                 dataKey="balance"

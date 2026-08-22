@@ -10,6 +10,8 @@ import {
   listForemen,
   listMovements,
 } from "@/server/queries";
+import { getDictionary, getLocale } from "@/i18n/server";
+import { translateValue } from "@/i18n";
 import { formatQuantity } from "@/lib/format";
 import { StatCard } from "@/shared/components/stat-card";
 import { EmptyState } from "@/shared/components/empty-state";
@@ -21,14 +23,22 @@ import { MovementsTable } from "@/features/operations/movements-table";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const project = getProject(id);
+  const project = await getProject(id);
   if (!project) notFound();
 
-  const user = await getCurrentUser();
-  const summary = getProjectSummaries().get(id);
-  const materialTotals = getProjectMaterialTotals(id);
-  const movements = listMovements({ projectId: id });
-  const foremen = listForemen({ includeInactive: true }).filter((f) => f.projectId === id);
+  const [t, locale, user, summaries, materialTotals, movements, allForemen] = await Promise.all([
+    getDictionary(),
+    getLocale(),
+    getCurrentUser(),
+    getProjectSummaries(),
+    getProjectMaterialTotals(id),
+    listMovements({ projectId: id }),
+    listForemen({ includeInactive: true }),
+  ]);
+
+  const summary = summaries.get(id);
+  const foremen = allForemen.filter((f) => f.projectId === id);
+  const unitOf = (unit: string) => translateValue(t.units, unit);
 
   return (
     <div className="space-y-6">
@@ -38,14 +48,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Все объекты
+          {t.projects.all}
         </Link>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
               <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{project.name}</h2>
-              {!project.isActive && <Badge variant="outline">Закрыт</Badge>}
+              {!project.isActive && <Badge variant="outline">{t.projects.closed}</Badge>}
             </div>
             {project.address && (
               <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -60,52 +70,52 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard
-          label="Материалов на объекте"
+          label={t.projects.detail.materialsOnSite}
           value={String(materialTotals.length)}
           icon={PackageMinus}
-          hint="Наименований прошло через объект"
-          color="orange"
+          hint={t.projects.detail.materialsHint}
+          tone="warning"
         />
         <StatCard
-          label="Операций"
+          label={t.projects.operations}
           value={String(summary?.movementCount ?? 0)}
           icon={Hammer}
-          hint={`Выдач: ${summary?.issueCount ?? 0} · списаний: ${summary?.usageCount ?? 0}`}
-          color="teal"
+          hint={t.projects.detail.operationsHint(summary?.issueCount ?? 0, summary?.usageCount ?? 0)}
+          tone="neutral"
         />
         <StatCard
-          label="Бригад на объекте"
+          label={t.projects.detail.brigadesOnSite}
           value={String(foremen.length)}
           icon={HardHat}
-          hint={foremen.map((f) => f.name).slice(0, 2).join(", ") || "Бригады не закреплены"}
-          color="indigo"
+          hint={foremen.map((f) => f.name).slice(0, 2).join(", ") || t.projects.detail.noBrigades}
+          tone="accent"
         />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-semibold">Сколько материалов ушло на объект</CardTitle>
+          <CardTitle className="text-[13px] font-semibold">{t.projects.detail.consumptionTitle}</CardTitle>
         </CardHeader>
         <CardContent>
           {materialTotals.length === 0 ? (
             <EmptyState
-              message="На объект пока ничего не выдавалось"
-              description="Здесь появится расход материалов, как только будет оформлена первая выдача"
+              message={t.projects.detail.noConsumption}
+              description={t.projects.detail.noConsumptionHint}
             />
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-xs font-medium text-muted-foreground">Материал</TableHead>
+                    <TableHead className="text-xs font-medium text-muted-foreground">{t.operations.material}</TableHead>
                     <TableHead className="text-right text-xs font-medium text-muted-foreground">
-                      Выдано
+                      {t.projects.detail.issued}
                     </TableHead>
                     <TableHead className="text-right text-xs font-medium text-muted-foreground">
-                      Израсходовано
+                      {t.projects.detail.used}
                     </TableHead>
                     <TableHead className="text-right text-xs font-medium text-muted-foreground">
-                      Осталось у бригад
+                      {t.projects.detail.remaining}
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -118,13 +128,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                         </Link>
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatQuantity(row.issued, row.unit)}
+                        {formatQuantity(row.issued, unitOf(row.unit), locale)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {formatQuantity(row.used, row.unit)}
+                        {formatQuantity(row.used, unitOf(row.unit), locale)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatQuantity(Math.max(0, row.issued - row.used), row.unit)}
+                        {formatQuantity(Math.max(0, row.issued - row.used), unitOf(row.unit), locale)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -136,13 +146,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       </Card>
 
       <div>
-        <h3 className="mb-3 text-sm font-semibold">Операции по объекту</h3>
+        <h3 className="mb-2.5 text-[13px] font-semibold">{t.projects.detail.history}</h3>
         <MovementsTable
           movements={movements}
           columns={["type", "date", "material", "quantity", "foreman", "user", "comment"]}
           pageSize={10}
-          emptyMessage="Операций по объекту ещё не было"
-          exportName={`obekt-${project.name}`}
+          emptyMessage={t.projects.detail.noHistory}
+          exportName={`obyekt-${project.name}`}
         />
       </div>
     </div>

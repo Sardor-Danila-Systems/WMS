@@ -1,11 +1,5 @@
 import Link from "next/link";
-import {
-  AlertTriangle,
-  ChevronRight,
-  HardHat,
-  Package,
-  TruckIcon,
-} from "lucide-react";
+import { AlertTriangle, ChevronRight, HardHat, Package, TruckIcon } from "lucide-react";
 
 import { PageHeader } from "@/shared/components/page-header";
 import { StatCard } from "@/shared/components/stat-card";
@@ -16,32 +10,39 @@ import { ActivityChart } from "@/features/dashboard/activity-chart";
 import { OperationDialog } from "@/features/operations/operation-dialog";
 import { getDashboardData, type PeriodTotals } from "@/server/queries";
 import { getOperationRefData } from "@/server/ref-data";
-import { getStockStatus, MOVEMENT_META } from "@/constants/colors";
+import { getStockStatus, MOVEMENT_COLORS, MOVEMENT_TYPES } from "@/constants/colors";
+import { getDictionary, getLocale } from "@/i18n/server";
+import { translateValue } from "@/i18n";
+import { declOf, formatDate, formatQuantity } from "@/lib/format";
 import type { MovementType } from "@/types";
-import { declOf, formatDateTime, formatQuantity } from "@/lib/format";
 
 /** Порядок соответствует движению материала: пришло → выдали → израсходовали → вернули. */
-const TODAY_BREAKDOWN: { type: MovementType; count: (t: PeriodTotals) => number }[] = [
-  { type: "RECEIPT", count: (t) => t.receiptCount },
-  { type: "ISSUE", count: (t) => t.issueCount },
-  { type: "USAGE", count: (t) => t.usageCount },
-  { type: "RETURN", count: (t) => t.returnCount },
-];
+const TODAY_COUNT: Record<MovementType, (t: PeriodTotals) => number> = {
+  RECEIPT: (t) => t.receiptCount,
+  ISSUE: (t) => t.issueCount,
+  USAGE: (t) => t.usageCount,
+  RETURN: (t) => t.returnCount,
+};
 
 export default async function DashboardPage() {
-  const data = getDashboardData();
-  const refData = getOperationRefData();
+  const [t, locale, data, refData] = await Promise.all([
+    getDictionary(),
+    getLocale(),
+    getDashboardData(),
+    getOperationRefData(),
+  ]);
 
   const todayTotal =
     data.today.receiptCount + data.today.issueCount + data.today.usageCount + data.today.returnCount;
   const weekTotal =
     data.week.receiptCount + data.week.issueCount + data.week.usageCount + data.week.returnCount;
+  const unitOf = (unit: string) => translateValue(t.units, unit);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
-        title="Дашборд"
-        description="Состояние склада на сегодня"
+        title={t.dashboard.title}
+        description={t.dashboard.subtitle}
         actions={
           <>
             <OperationDialog type="RECEIPT" data={refData} variant="outline" />
@@ -50,57 +51,63 @@ export default async function DashboardPage() {
         }
       />
 
-      {/* Четыре показателя отвечают на вопрос «что со складом прямо сейчас».
-          Количества разных материалов намеренно не суммируются: тонны, штуки
+      {/* Количества разных материалов намеренно не суммируются: тонны, штуки
           и литры нельзя сложить в одно осмысленное число, поэтому итоги
           показываются в позициях и операциях. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
-          label="Материалов на складе"
+          label={t.dashboard.materialsCount}
           value={String(data.materialsCount)}
           icon={Package}
-          hint="Наименований в каталоге"
-          color="indigo"
+          hint={t.dashboard.materialsHint}
+          tone="accent"
         />
         <StatCard
-          label="Требуют пополнения"
+          label={t.dashboard.lowStock}
           value={String(data.lowStockMaterials.length)}
           icon={AlertTriangle}
-          hint={
-            data.lowStockMaterials.length > 0
-              ? "Остаток опустился до минимума"
-              : "Все позиции в норме"
-          }
-          color={data.lowStockMaterials.length > 0 ? "red" : "slate"}
+          hint={data.lowStockMaterials.length > 0 ? t.dashboard.lowStockHint : t.dashboard.lowStockOk}
+          tone={data.lowStockMaterials.length > 0 ? "danger" : "neutral"}
         />
         <StatCard
-          label="На руках у бригад"
-          value={`${data.foremanPositions} ${declOf(data.foremanPositions, "позиция", "позиции", "позиций")}`}
+          label={t.dashboard.atForemen}
+          value={`${data.foremanPositions} ${declOf(
+            data.foremanPositions,
+            t.dashboard.positionWord.one,
+            t.dashboard.positionWord.few,
+            t.dashboard.positionWord.many
+          )}`}
           icon={HardHat}
-          hint={`У ${data.foremenWithStock} из ${data.foremenCount} бригадиров · ${data.projectsCount} объектов`}
-          color="orange"
+          hint={t.dashboard.atForemenHint(
+            data.foremenWithStock,
+            data.foremenCount,
+            data.projectsCount
+          )}
+          tone="warning"
         />
         <StatCard
-          label="Операций сегодня"
+          label={t.dashboard.todayOps}
           value={String(todayTotal)}
           icon={TruckIcon}
-          hint={`За неделю: ${weekTotal}`}
-          color="blue"
+          hint={t.dashboard.weekOps(weekTotal)}
+          tone="neutral"
         />
       </div>
 
       {/* Движение за сегодня — одной компактной строкой вместо четырёх карточек. */}
-      <div className="rounded-xl border border-border bg-card px-4 py-3">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <span className="text-xs font-medium text-muted-foreground">Движение за сегодня</span>
-          {TODAY_BREAKDOWN.map((item) => (
-            <span key={item.type} className="flex items-center gap-1.5 text-sm">
+      <div className="rounded-lg border border-border bg-card px-4 py-3">
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+            {t.dashboard.todayMovement}
+          </span>
+          {MOVEMENT_TYPES.map((type) => (
+            <span key={type} className="flex items-center gap-1.5 text-[13px]">
               <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: MOVEMENT_META[item.type].color }}
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: MOVEMENT_COLORS[type].color }}
               />
-              <span className="text-muted-foreground">{MOVEMENT_META[item.type].label}:</span>
-              <span className="font-semibold tabular-nums">{item.count(data.today)}</span>
+              <span className="text-muted-foreground">{t.movements[type]}</span>
+              <span className="font-semibold tabular-nums">{TODAY_COUNT[type](data.today)}</span>
             </span>
           ))}
         </div>
@@ -111,37 +118,35 @@ export default async function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm font-semibold">Требуют пополнения</CardTitle>
+            <CardTitle className="text-[13px] font-semibold">{t.dashboard.lowStockCard}</CardTitle>
             <Link
               href="/materials?filter=low-stock"
               className="text-xs text-primary transition-colors hover:underline"
             >
-              Все материалы
+              {t.dashboard.allMaterials}
             </Link>
           </CardHeader>
           <CardContent className="space-y-0.5">
             {data.lowStockMaterials.length === 0 && (
-              <EmptyState
-                message="Все материалы в норме"
-                description="Ни одна позиция не опустилась до минимального остатка"
-              />
+              <EmptyState message={t.dashboard.allGood} description={t.dashboard.allGoodHint} />
             )}
             {data.lowStockMaterials.slice(0, 6).map((material) => (
               <Link
                 key={material.id}
                 href={`/materials/${material.id}`}
-                className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/60"
+                className="flex items-center justify-between gap-3 rounded-md px-2 py-2 transition-colors hover:bg-muted/60"
               >
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{material.name}</div>
+                  <div className="truncate text-[13px] font-medium">{material.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {formatQuantity(material.quantity, material.unit)} · минимум{" "}
-                    {formatQuantity(material.minStock, material.unit)}
+                    {formatQuantity(material.quantity, unitOf(material.unit), locale)} ·{" "}
+                    {t.dashboard.minimum}{" "}
+                    {formatQuantity(material.minStock, unitOf(material.unit), locale)}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <StockStatusBadge status={getStockStatus(material.quantity, material.minStock)} />
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  <ChevronRight className="hidden h-3.5 w-3.5 text-muted-foreground sm:block" />
                 </div>
               </Link>
             ))}
@@ -150,34 +155,37 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm font-semibold">Последние операции</CardTitle>
+            <CardTitle className="text-[13px] font-semibold">{t.dashboard.recentOps}</CardTitle>
             <Link href="/history" className="text-xs text-primary transition-colors hover:underline">
-              Вся история
+              {t.dashboard.fullHistory}
             </Link>
           </CardHeader>
           <CardContent className="space-y-0.5">
             {data.recentMovements.length === 0 && (
-              <EmptyState message="Операций ещё не было" description="Оформите первое поступление на склад" />
+              <EmptyState
+                message={t.dashboard.noRecentOps}
+                description={t.dashboard.noRecentOpsHint}
+              />
             )}
             {data.recentMovements.map((movement) => (
               <div
                 key={movement.id}
-                className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted/60"
+                className="flex items-start gap-2.5 rounded-md px-2 py-2 transition-colors hover:bg-muted/60"
               >
                 <MovementTypeBadge type={movement.type} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{movement.materialName}</div>
+                  <div className="truncate text-[13px] font-medium">{movement.materialName}</div>
                   {/* Подписываем контрагента: иначе непонятно, чьё это имя —
                       бригадира, поставщика или сотрудника склада. */}
                   <div className="truncate text-xs text-muted-foreground">
-                    {formatQuantity(movement.quantity, movement.unit)}
-                    {movement.supplierName && ` · от ${movement.supplierName}`}
-                    {movement.foremanName && ` · бригадир ${movement.foremanName}`}
+                    {formatQuantity(movement.quantity, unitOf(movement.unit), locale)}
+                    {movement.supplierName && ` · ${t.dashboard.fromSupplier(movement.supplierName)}`}
+                    {movement.foremanName && ` · ${t.dashboard.foremanLabel(movement.foremanName)}`}
                     {movement.projectName && ` · ${movement.projectName}`}
                   </div>
                 </div>
                 <div className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
-                  {formatDateTime(movement.occurredAt)}
+                  {formatDate(movement.occurredAt, locale)}
                 </div>
               </div>
             ))}

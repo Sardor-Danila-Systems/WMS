@@ -5,16 +5,8 @@
  *
  *   npm run test:e2e
  */
-import { rmSync } from "node:fs";
-import path from "node:path";
-
-const TEST_DB = path.join(process.cwd(), "data", "test-flow.db");
-rmSync(TEST_DB, { force: true });
-rmSync(`${TEST_DB}-wal`, { force: true });
-rmSync(`${TEST_DB}-shm`, { force: true });
-process.env.WMS_DB_PATH = TEST_DB;
-
-const { getDb, queryOne } = await import("@/lib/db/client");
+const { getPool, queryOne } = await import("@/lib/db/client");
+const { SCHEMA_SQL } = await import("@/lib/db/schema");
 const { seedDatabase } = await import("@/lib/db/seed");
 const { recordMovement, verifyLedgerConsistency } = await import("@/server/movements");
 const { createMaterial, createForeman, deleteMaterial, updateMaterial } = await import("@/server/catalog");
@@ -22,7 +14,9 @@ const { getMaterial, getForemanStock, listMovements } = await import("@/server/q
 const { BusinessError } = await import("@/server/errors");
 const { hashPassword, verifyPassword } = await import("@/lib/auth/password");
 
-getDb();
+// Тест работает на той же базе, но полностью пересоздаёт данные,
+// поэтому запускать его следует на тестовой базе (см. .env.local).
+await getPool().query(SCHEMA_SQL);
 
 let passed = 0;
 let failed = 0;
@@ -38,9 +32,9 @@ function check(label: string, actual: unknown, expected: unknown) {
   }
 }
 
-function checkThrows(label: string, fn: () => unknown) {
+async function checkThrows(label: string, fn: () => unknown) {
   try {
-    fn();
+    await fn();
     failed++;
     console.error(`  ✗ ${label}: операция прошла, хотя должна была быть отклонена`);
   } catch (error) {
@@ -55,9 +49,9 @@ function checkThrows(label: string, fn: () => unknown) {
 }
 
 console.log("\nПодготовка: справочники без истории операций");
-seedDatabase({ reset: true, skipHistory: true });
+await seedDatabase({ reset: true, skipHistory: true });
 
-const admin = queryOne<{ id: string }>("SELECT id FROM users WHERE username = 'admin'")!;
+const admin = (await queryOne<{ id: string }>("SELECT id FROM users WHERE username = 'admin'"))!;
 
 /**
  * Метки времени операций разносим на минуты вперёд от текущего момента:
@@ -73,17 +67,18 @@ const now = at(60);
 console.log("\nTEST 1 — полный цикл движения материала (Цемент)");
 /* ================================================================== */
 
-const { id: cementId } = createMaterial({
+const { id: cementId } = await createMaterial({
   name: "Цемент М500 (тест)",
   category: "Цемент и смеси",
   unit: "мешок",
   minStock: 50,
   initialQuantity: 100,
   userId: admin.id,
+  initialStockComment: "Начальный остаток",
 });
-check("начальный остаток", getMaterial(cementId)!.quantity, 100);
+check("начальный остаток", (await getMaterial(cementId))!.quantity, 100);
 
-const { id: foremanId } = createForeman({
+const { id: foremanId } = await createForeman({
   name: "Тестовый Бригадир",
   phone: "+7 (900) 000-00-00",
   brigade: "Тестовая бригада",
@@ -91,22 +86,22 @@ const { id: foremanId } = createForeman({
   isActive: true,
 });
 
-recordMovement({ type: "RECEIPT", materialId: cementId, quantity: 500, userId: admin.id, occurredAt: at(10) });
-check("после поступления +500", getMaterial(cementId)!.quantity, 600);
+await recordMovement({ type: "RECEIPT", materialId: cementId, quantity: 500, userId: admin.id, occurredAt: at(10) });
+check("после поступления +500", (await getMaterial(cementId))!.quantity, 600);
 
-recordMovement({ type: "ISSUE", materialId: cementId, quantity: 200, userId: admin.id, foremanId, occurredAt: at(20) });
-check("склад после выдачи 200", getMaterial(cementId)!.quantity, 400);
-check("на руках у бригадира", getForemanStock(foremanId)[0]?.quantity, 200);
+await recordMovement({ type: "ISSUE", materialId: cementId, quantity: 200, userId: admin.id, foremanId, occurredAt: at(20) });
+check("склад после выдачи 200", (await getMaterial(cementId))!.quantity, 400);
+check("на руках у бригадира", (await getForemanStock(foremanId))[0]?.quantity, 200);
 
-recordMovement({ type: "USAGE", materialId: cementId, quantity: 150, userId: admin.id, foremanId, occurredAt: at(30) });
-check("склад после использования (не меняется)", getMaterial(cementId)!.quantity, 400);
-check("у бригадира после использования 150", getForemanStock(foremanId)[0]?.quantity, 50);
+await recordMovement({ type: "USAGE", materialId: cementId, quantity: 150, userId: admin.id, foremanId, occurredAt: at(30) });
+check("склад после использования (не меняется)", (await getMaterial(cementId))!.quantity, 400);
+check("у бригадира после использования 150", (await getForemanStock(foremanId))[0]?.quantity, 50);
 
-recordMovement({ type: "RETURN", materialId: cementId, quantity: 50, userId: admin.id, foremanId, occurredAt: at(40) });
-check("склад после возврата 50", getMaterial(cementId)!.quantity, 450);
-check("у бригадира после возврата", getForemanStock(foremanId).length, 0);
+await recordMovement({ type: "RETURN", materialId: cementId, quantity: 50, userId: admin.id, foremanId, occurredAt: at(40) });
+check("склад после возврата 50", (await getMaterial(cementId))!.quantity, 450);
+check("у бригадира после возврата", (await getForemanStock(foremanId)).length, 0);
 
-const history = listMovements({ materialId: cementId });
+const history = await listMovements({ materialId: cementId });
 check("записей в истории", history.length, 5);
 check("типы операций в истории", history.map((m) => m.type).reverse().join(","), "RECEIPT,RECEIPT,ISSUE,USAGE,RETURN");
 check("остаток склада в последней записи", history[0].warehouseAfter, 450);
@@ -115,43 +110,43 @@ check("остаток склада в последней записи", history[
 console.log("\nNEGATIVE TESTS — систему нельзя привести в некорректное состояние");
 /* ================================================================== */
 
-checkThrows("нельзя выдать больше остатка склада", () =>
-  recordMovement({ type: "ISSUE", materialId: cementId, quantity: 10_000, userId: admin.id, foremanId, occurredAt: now })
+await checkThrows("нельзя выдать больше остатка склада", async () =>
+  await recordMovement({ type: "ISSUE", materialId: cementId, quantity: 10_000, userId: admin.id, foremanId, occurredAt: now })
 );
 
-recordMovement({ type: "ISSUE", materialId: cementId, quantity: 100, userId: admin.id, foremanId, occurredAt: now });
+await recordMovement({ type: "ISSUE", materialId: cementId, quantity: 100, userId: admin.id, foremanId, occurredAt: now });
 
-checkThrows("нельзя использовать больше, чем на руках", () =>
-  recordMovement({ type: "USAGE", materialId: cementId, quantity: 500, userId: admin.id, foremanId, occurredAt: now })
+await checkThrows("нельзя использовать больше, чем на руках", async () =>
+  await recordMovement({ type: "USAGE", materialId: cementId, quantity: 500, userId: admin.id, foremanId, occurredAt: now })
 );
 
-checkThrows("нельзя вернуть больше, чем получено", () =>
-  recordMovement({ type: "RETURN", materialId: cementId, quantity: 500, userId: admin.id, foremanId, occurredAt: now })
+await checkThrows("нельзя вернуть больше, чем получено", async () =>
+  await recordMovement({ type: "RETURN", materialId: cementId, quantity: 500, userId: admin.id, foremanId, occurredAt: now })
 );
 
-checkThrows("нельзя создать операцию с количеством 0", () =>
-  recordMovement({ type: "RECEIPT", materialId: cementId, quantity: 0, userId: admin.id, occurredAt: now })
+await checkThrows("нельзя создать операцию с количеством 0", async () =>
+  await recordMovement({ type: "RECEIPT", materialId: cementId, quantity: 0, userId: admin.id, occurredAt: now })
 );
 
-checkThrows("нельзя создать операцию с количеством -10", () =>
-  recordMovement({ type: "RECEIPT", materialId: cementId, quantity: -10, userId: admin.id, occurredAt: now })
+await checkThrows("нельзя создать операцию с количеством -10", async () =>
+  await recordMovement({ type: "RECEIPT", materialId: cementId, quantity: -10, userId: admin.id, occurredAt: now })
 );
 
-checkThrows("нельзя создать операцию с NaN", () =>
-  recordMovement({ type: "RECEIPT", materialId: cementId, quantity: Number.NaN, userId: admin.id, occurredAt: now })
+await checkThrows("нельзя создать операцию с NaN", async () =>
+  await recordMovement({ type: "RECEIPT", materialId: cementId, quantity: Number.NaN, userId: admin.id, occurredAt: now })
 );
 
-checkThrows("нельзя провести операцию по несуществующему материалу", () =>
-  recordMovement({ type: "RECEIPT", materialId: "нет-такого", quantity: 5, userId: admin.id, occurredAt: now })
+await checkThrows("нельзя провести операцию по несуществующему материалу", async () =>
+  await recordMovement({ type: "RECEIPT", materialId: "нет-такого", quantity: 5, userId: admin.id, occurredAt: now })
 );
 
-checkThrows("выдача без бригадира запрещена", () =>
-  recordMovement({ type: "ISSUE", materialId: cementId, quantity: 5, userId: admin.id, occurredAt: now })
+await checkThrows("выдача без бригадира запрещена", async () =>
+  await recordMovement({ type: "ISSUE", materialId: cementId, quantity: 5, userId: admin.id, occurredAt: now })
 );
 
-checkThrows("нельзя удалить материал с историей движений", () => deleteMaterial(cementId));
+await checkThrows("нельзя удалить материал с историей движений", () => deleteMaterial(cementId));
 
-checkThrows("нельзя изменить единицу измерения после операций", () =>
+await checkThrows("нельзя изменить единицу измерения после операций", () =>
   updateMaterial(cementId, {
     name: "Цемент М500 (тест)",
     category: "Цемент и смеси",
@@ -161,28 +156,29 @@ checkThrows("нельзя изменить единицу измерения п�
 );
 
 /* --- Откат транзакции ---------------------------------------------- */
-const beforeFailed = getMaterial(cementId)!.quantity;
-const movementsBefore = listMovements({ materialId: cementId }).length;
+const beforeFailed = (await getMaterial(cementId))!.quantity;
+const movementsBefore = (await listMovements({ materialId: cementId })).length;
 try {
-  recordMovement({ type: "ISSUE", materialId: cementId, quantity: 999_999, userId: admin.id, foremanId, occurredAt: now });
+  await recordMovement({ type: "ISSUE", materialId: cementId, quantity: 999_999, userId: admin.id, foremanId, occurredAt: now });
 } catch {
   // ожидаемо
 }
-check("остаток не изменился после отклонённой операции", getMaterial(cementId)!.quantity, beforeFailed);
-check("движение не записалось после отклонённой операции", listMovements({ materialId: cementId }).length, movementsBefore);
+check("остаток не изменился после отклонённой операции", (await getMaterial(cementId))!.quantity, beforeFailed);
+check("движение не записалось после отклонённой операции", (await listMovements({ materialId: cementId })).length, movementsBefore);
 
 /* --- Дробные количества --------------------------------------------- */
-const { id: sandId } = createMaterial({
+const { id: sandId } = await createMaterial({
   name: "Песок (тест дробных)",
   category: "Нерудные материалы",
   unit: "м³",
   minStock: 5,
   initialQuantity: 0,
   userId: admin.id,
+  initialStockComment: "Начальный остаток",
 });
-recordMovement({ type: "RECEIPT", materialId: sandId, quantity: 0.1, userId: admin.id, occurredAt: now });
-recordMovement({ type: "RECEIPT", materialId: sandId, quantity: 0.2, userId: admin.id, occurredAt: now });
-check("дробные количества не накапливают погрешность", getMaterial(sandId)!.quantity, 0.3);
+await recordMovement({ type: "RECEIPT", materialId: sandId, quantity: 0.1, userId: admin.id, occurredAt: now });
+await recordMovement({ type: "RECEIPT", materialId: sandId, quantity: 0.2, userId: admin.id, occurredAt: now });
+check("дробные количества не накапливают погрешность", (await getMaterial(sandId))!.quantity, 0.3);
 
 /* --- Пароли ---------------------------------------------------------- */
 const hash = hashPassword("sekret123");
@@ -191,17 +187,17 @@ check("неверный пароль отклоняется", verifyPassword("se
 check("пароль не хранится в открытом виде", hash.includes("sekret123"), false);
 
 /* --- Целостность ----------------------------------------------------- */
-const consistency = verifyLedgerConsistency();
+const consistency = await verifyLedgerConsistency();
 check("остатки сходятся с журналом движений", consistency.ok, true);
 
-const negativeStock = queryOne<{ c: number }>("SELECT COUNT(*) AS c FROM materials WHERE quantity < 0")!;
+const negativeStock = (await queryOne<{ c: number }>("SELECT COUNT(*)::int AS c FROM materials WHERE quantity < 0"))!;
 check("нет отрицательных остатков склада", negativeStock.c, 0);
-const negativeForeman = queryOne<{ c: number }>("SELECT COUNT(*) AS c FROM foreman_stock WHERE quantity < 0")!;
+const negativeForeman = (await queryOne<{ c: number }>("SELECT COUNT(*)::int AS c FROM foreman_stock WHERE quantity < 0"))!;
 check("нет отрицательных остатков у бригадиров", negativeForeman.c, 0);
 
 /* ================================================================== */
 console.log(`\n${failed === 0 ? "✓" : "✗"} Пройдено ${passed}, провалено ${failed}`);
-rmSync(TEST_DB, { force: true });
-rmSync(`${TEST_DB}-wal`, { force: true });
-rmSync(`${TEST_DB}-shm`, { force: true });
+await getPool().end();
 process.exit(failed === 0 ? 0 : 1);
+
+export {};

@@ -6,16 +6,11 @@ import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MOVEMENT_META, MOVEMENT_TYPES } from "@/constants/colors";
+import { MOVEMENT_TYPES } from "@/constants/colors";
+import { useT } from "@/i18n/client";
 import type { Foreman, Material, Project, User } from "@/types";
 
-export const PERIOD_OPTIONS = [
-  { value: "all", label: "Всё время" },
-  { value: "today", label: "Сегодня" },
-  { value: "7", label: "Последние 7 дней" },
-  { value: "30", label: "Последние 30 дней" },
-  { value: "90", label: "Последние 90 дней" },
-] as const;
+export const PERIOD_KEYS = ["all", "today", "7", "30", "90"] as const;
 
 interface HistoryFiltersProps {
   materials: Material[];
@@ -34,6 +29,7 @@ export function HistoryFilters({ materials, foremen, users, projects, current }:
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const t = useT();
 
   function setParam(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -47,67 +43,67 @@ export function HistoryFilters({ materials, foremen, users, projects, current }:
     (key) => current[key] && current[key] !== "all"
   ).length;
 
-  const filters: {
-    key: string;
-    width: string;
-    placeholder: string;
-    options: { value: string; label: string }[];
-  }[] = [
+  const periodLabels: Record<string, string> = {
+    all: t.periods.all,
+    today: t.periods.today,
+    "7": t.periods.days7,
+    "30": t.periods.days30,
+    "90": t.periods.days90,
+  };
+
+  const filters = [
     {
       key: "type",
-      width: "w-full sm:w-44",
-      placeholder: "Тип операции",
+      placeholder: t.history.filters.type,
       options: [
-        { value: "all", label: "Все типы" },
-        ...MOVEMENT_TYPES.map((type) => ({ value: type, label: MOVEMENT_META[type].label })),
+        { value: "all", label: t.history.filters.allTypes },
+        ...MOVEMENT_TYPES.map((type) => ({ value: type, label: t.movements[type] })),
       ],
     },
     {
       key: "period",
-      width: "w-full sm:w-44",
-      placeholder: "Период",
-      options: PERIOD_OPTIONS.map((p) => ({ value: p.value, label: p.label })),
+      placeholder: t.common.period,
+      options: PERIOD_KEYS.map((value) => ({ value, label: periodLabels[value] })),
     },
     {
       key: "materialId",
-      width: "w-full sm:w-52",
-      placeholder: "Материал",
+      placeholder: t.operations.material,
       options: [
-        { value: "all", label: "Все материалы" },
+        { value: "all", label: t.history.filters.allMaterials },
         ...materials.map((m) => ({ value: m.id, label: m.name })),
       ],
     },
     {
       key: "foremanId",
-      width: "w-full sm:w-48",
-      placeholder: "Бригадир",
+      placeholder: t.operations.foreman,
       options: [
-        { value: "all", label: "Все бригадиры" },
+        { value: "all", label: t.history.filters.allForemen },
         ...foremen.map((f) => ({ value: f.id, label: f.name })),
       ],
     },
     {
       key: "projectId",
-      width: "w-full sm:w-52",
-      placeholder: "Объект",
+      placeholder: t.operations.project,
       options: [
-        { value: "all", label: "Все объекты" },
+        { value: "all", label: t.history.filters.allProjects },
         ...projects.map((p) => ({ value: p.id, label: p.name })),
       ],
     },
     {
       key: "userId",
-      width: "w-full sm:w-48",
-      placeholder: "Сотрудник",
+      placeholder: t.operations.employee,
       options: [
-        { value: "all", label: "Все сотрудники" },
+        { value: "all", label: t.history.filters.allUsers },
         ...users.map((u) => ({ value: u.id, label: u.fullName })),
       ],
     },
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-2" data-pending={isPending || undefined}>
+    <div
+      className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center"
+      data-pending={isPending || undefined}
+    >
       {filters.map((filter) => (
         <Select
           key={filter.key}
@@ -115,7 +111,7 @@ export function HistoryFilters({ materials, foremen, users, projects, current }:
           onValueChange={(value) => setParam(filter.key, value ?? "all")}
           items={Object.fromEntries(filter.options.map((o) => [o.value, o.label]))}
         >
-          <SelectTrigger className={filter.width}>
+          <SelectTrigger className="w-full sm:w-[168px]" aria-label={filter.placeholder}>
             <SelectValue placeholder={filter.placeholder} />
           </SelectTrigger>
           <SelectContent>
@@ -132,11 +128,11 @@ export function HistoryFilters({ materials, foremen, users, projects, current }:
         <Button
           variant="ghost"
           size="sm"
-          className="gap-1.5 text-muted-foreground"
+          className="col-span-2 gap-1.5 text-muted-foreground sm:col-span-1"
           onClick={() => startTransition(() => router.replace("/history", { scroll: false }))}
         >
           <X className="h-3.5 w-3.5" />
-          Сбросить ({activeCount})
+          {t.history.filters.resetWithCount(activeCount)}
         </Button>
       )}
     </div>

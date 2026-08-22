@@ -5,14 +5,20 @@ import { UsersTable } from "@/features/users/users-table";
 import { UserFormDialog } from "@/features/users/user-form-dialog";
 import { requireUser, roleCan } from "@/lib/auth/dal";
 import { getUserOperationCounts, listUsers } from "@/server/queries";
+import { getDictionary } from "@/i18n/server";
 
 export default async function WorkersPage() {
   const user = await requireUser();
   // Раздел доступен только администратору; остальных возвращаем на дашборд.
   if (!roleCan(user.role, "user:write")) redirect("/");
 
-  const counts = getUserOperationCounts();
-  const users = listUsers({ includeInactive: true }).map((u) => ({
+  const [t, counts, list] = await Promise.all([
+    getDictionary(),
+    getUserOperationCounts(),
+    listUsers({ includeInactive: true }),
+  ]);
+
+  const users = list.map((u) => ({
     ...u,
     operationCount: counts.get(u.id) ?? 0,
   }));
@@ -20,8 +26,8 @@ export default async function WorkersPage() {
   return (
     <div>
       <PageHeader
-        title="Сотрудники"
-        description="Работники склада и их доступ в систему. По логину видно, кто провёл каждую операцию."
+        title={t.users.title}
+        description={t.users.subtitle}
         actions={<UserFormDialog />}
       />
       <UsersTable users={users} />

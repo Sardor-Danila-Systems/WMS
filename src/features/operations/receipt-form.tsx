@@ -7,6 +7,8 @@ import type { z } from "zod";
 import { createReceipt } from "@/app/actions/movements";
 import { receiptSchema } from "@/lib/validation";
 import { formatQuantity } from "@/lib/format";
+import { useI18n } from "@/i18n/client";
+import { translateValue } from "@/i18n";
 import { FormField } from "@/shared/components/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +21,8 @@ import type { OperationRefData } from "./types";
 type Values = z.input<typeof receiptSchema>;
 
 export function ReceiptForm({ data, onSuccess }: { data: OperationRefData; onSuccess: () => void }) {
+  const { t, locale } = useI18n();
+  const unitOf = (unit: string) => translateValue(t.units, unit);
   const {
     register,
     handleSubmit,
@@ -42,9 +46,14 @@ export function ReceiptForm({ data, onSuccess }: { data: OperationRefData; onSuc
   const { submit, isPending } = useActionSubmit<Values>({
     action: createReceipt,
     setError,
-    successTitle: "Поступление зарегистрировано",
+    successTitle: t.operations.receipt.success,
     successDescription: (values) =>
-      material ? `Остаток «${material.name}» увеличен на ${formatQuantity(Number(values.quantity), material.unit)}` : undefined,
+      material
+        ? t.operations.receipt.successHint(
+            material.name,
+            formatQuantity(Number(values.quantity), unitOf(material.unit), locale)
+          )
+        : undefined,
     onSuccess,
   });
 
@@ -53,36 +62,38 @@ export function ReceiptForm({ data, onSuccess }: { data: OperationRefData; onSuc
       <SelectField
         control={control}
         name="materialId"
-        label="Материал"
-        placeholder="Что поступило на склад"
+        label={t.operations.material}
+        placeholder={t.operations.receipt.materialPlaceholder}
         required
         error={errors.materialId?.message}
         disabled={isPending}
         options={data.materials.map((m) => ({
           value: m.id,
           label: m.name,
-          hint: formatQuantity(m.quantity, m.unit),
+          hint: formatQuantity(m.quantity, unitOf(m.unit), locale),
         }))}
       >
         {material && (
           <p className="text-xs text-muted-foreground">
-            Текущий остаток:{" "}
-            <span className="font-medium tabular-nums">{formatQuantity(material.quantity, material.unit)}</span>
+            {t.operations.currentStock}:{" "}
+            <span className="font-medium tabular-nums">
+              {formatQuantity(material.quantity, unitOf(material.unit), locale)}
+            </span>
           </p>
         )}
       </SelectField>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label="Количество" required error={errors.quantity?.message}>
+        <FormField label={t.operations.quantity} required error={errors.quantity?.message}>
           <QuantityInput
-            unit={material?.unit}
+            unit={material ? unitOf(material.unit) : undefined}
             invalid={Boolean(errors.quantity)}
             disabled={isPending}
             {...register("quantity")}
           />
         </FormField>
 
-        <FormField label="Дата поступления" required error={errors.occurredAt?.message}>
+        <FormField label={t.operations.receipt.date} required error={errors.occurredAt?.message}>
           <Input type="date" max={todayISODate()} disabled={isPending} {...register("occurredAt")} />
         </FormField>
       </div>
@@ -91,25 +102,25 @@ export function ReceiptForm({ data, onSuccess }: { data: OperationRefData; onSuc
         <SelectField
           control={control}
           name="supplierId"
-          label="Поставщик"
-          placeholder="Кто привёз"
+          label={t.operations.supplier}
+          placeholder={t.operations.receipt.supplierPlaceholder}
           error={errors.supplierId?.message}
           disabled={isPending}
           options={data.suppliers.map((s) => ({ value: s.id, label: s.name }))}
         />
 
-        <FormField label="Номер машины" error={errors.vehicleNumber?.message}>
-          <Input placeholder="А123ВС 77" disabled={isPending} {...register("vehicleNumber")} />
+        <FormField label={t.operations.vehicleNumber} error={errors.vehicleNumber?.message}>
+          <Input placeholder={t.operations.vehiclePlaceholder} disabled={isPending} {...register("vehicleNumber")} />
         </FormField>
       </div>
 
-      <FormField label="Комментарий" error={errors.comment?.message}>
-        <Textarea placeholder="Необязательно" rows={2} disabled={isPending} {...register("comment")} />
+      <FormField label={t.operations.comment} error={errors.comment?.message}>
+        <Textarea placeholder={t.common.optional} rows={2} disabled={isPending} {...register("comment")} />
       </FormField>
 
       <DialogFooter>
         <Button type="submit" disabled={isPending}>
-          {isPending ? "Сохраняем..." : "Принять на склад"}
+          {isPending ? t.common.saving : t.operations.receipt.submit}
         </Button>
       </DialogFooter>
     </form>

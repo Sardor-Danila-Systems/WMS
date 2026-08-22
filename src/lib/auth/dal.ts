@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { getSessionUser, type SessionUser } from "./session";
 import type { Role } from "@/types";
+import { BusinessError } from "@/server/errors";
 
 /**
  * Права ролей. ADMIN — всё; WAREHOUSE_WORKER — ежедневные складские операции
@@ -53,7 +54,7 @@ export async function requireUser(): Promise<SessionUser> {
 export async function requirePermission(permission: Permission): Promise<SessionUser> {
   const user = await requireUser();
   if (!roleCan(user.role, permission)) {
-    throw new Error("Недостаточно прав для выполнения операции");
+    throw new BusinessError("NO_PERMISSION");
   }
   return user;
 }

@@ -8,6 +8,8 @@ import type { z } from "zod";
 import { createIssue } from "@/app/actions/movements";
 import { issueSchema } from "@/lib/validation";
 import { formatQuantity } from "@/lib/format";
+import { useI18n } from "@/i18n/client";
+import { translateValue } from "@/i18n";
 import { FormField } from "@/shared/components/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +22,8 @@ import type { OperationRefData } from "./types";
 type Values = z.input<typeof issueSchema>;
 
 export function IssueForm({ data, onSuccess }: { data: OperationRefData; onSuccess: () => void }) {
+  const { t, locale } = useI18n();
+  const unitOf = (unit: string) => translateValue(t.units, unit);
   const {
     register,
     handleSubmit,
@@ -56,10 +60,12 @@ export function IssueForm({ data, onSuccess }: { data: OperationRefData; onSucce
   const { submit, isPending } = useActionSubmit<Values>({
     action: createIssue,
     setError,
-    successTitle: "Выдача оформлена",
+    successTitle: t.operations.issue.success,
     successDescription: (values) =>
       material
-        ? `Со склада списано ${formatQuantity(Number(values.quantity), material.unit)}, материал закреплён за бригадиром`
+        ? t.operations.issue.successHint(
+            formatQuantity(Number(values.quantity), unitOf(material.unit), locale)
+          )
         : undefined,
     onSuccess,
   });
@@ -69,8 +75,8 @@ export function IssueForm({ data, onSuccess }: { data: OperationRefData; onSucce
       <SelectField
         control={control}
         name="foremanId"
-        label="Бригадир"
-        placeholder="Кому выдаём материал"
+        label={t.operations.foreman}
+        placeholder={t.operations.issue.foremanPlaceholder}
         required
         error={errors.foremanId?.message}
         disabled={isPending}
@@ -80,30 +86,30 @@ export function IssueForm({ data, onSuccess }: { data: OperationRefData; onSucce
       <SelectField
         control={control}
         name="materialId"
-        label="Материал"
-        placeholder="Что выдаём"
+        label={t.operations.material}
+        placeholder={t.operations.issue.materialPlaceholder}
         required
         error={errors.materialId?.message}
         disabled={isPending}
         options={data.materials.map((m) => ({
           value: m.id,
           label: m.name,
-          hint: formatQuantity(m.quantity, m.unit),
+          hint: formatQuantity(m.quantity, unitOf(m.unit), locale),
         }))}
       >
         {material && (
-          <AvailableHint available={material.quantity} unit={material.unit} label="Доступно на складе" />
+          <AvailableHint available={material.quantity} unit={material.unit} label={t.operations.availableAtWarehouse} />
         )}
       </SelectField>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField
-          label="Количество"
+          label={t.operations.quantity}
           required
-          error={errors.quantity?.message ?? (exceedsStock ? "Больше, чем есть на складе" : undefined)}
+          error={errors.quantity?.message ?? (exceedsStock ? t.operations.exceedsStock : undefined)}
         >
           <QuantityInput
-            unit={material?.unit}
+            unit={material ? unitOf(material.unit) : undefined}
             max={material?.quantity}
             invalid={Boolean(errors.quantity) || exceedsStock}
             disabled={isPending}
@@ -111,7 +117,7 @@ export function IssueForm({ data, onSuccess }: { data: OperationRefData; onSucce
           />
         </FormField>
 
-        <FormField label="Дата выдачи" required error={errors.occurredAt?.message}>
+        <FormField label={t.operations.issue.date} required error={errors.occurredAt?.message}>
           <Input type="date" max={todayISODate()} disabled={isPending} {...register("occurredAt")} />
         </FormField>
       </div>
@@ -119,20 +125,20 @@ export function IssueForm({ data, onSuccess }: { data: OperationRefData; onSucce
       <SelectField
         control={control}
         name="projectId"
-        label="Объект"
-        placeholder="На какой объект уходит материал"
+        label={t.operations.project}
+        placeholder={t.operations.issue.projectPlaceholder}
         error={errors.projectId?.message}
         disabled={isPending}
         options={data.projects.map((p) => ({ value: p.id, label: p.name }))}
       />
 
-      <FormField label="Комментарий" error={errors.comment?.message}>
-        <Textarea placeholder="Необязательно" rows={2} disabled={isPending} {...register("comment")} />
+      <FormField label={t.operations.comment} error={errors.comment?.message}>
+        <Textarea placeholder={t.common.optional} rows={2} disabled={isPending} {...register("comment")} />
       </FormField>
 
       <DialogFooter>
         <Button type="submit" disabled={isPending || exceedsStock}>
-          {isPending ? "Сохраняем..." : "Выдать материал"}
+          {isPending ? t.common.saving : t.operations.issue.submit}
         </Button>
       </DialogFooter>
     </form>

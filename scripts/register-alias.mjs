@@ -31,11 +31,17 @@ registerHooks({
       const resolved = resolveFile(path.join(srcDir, specifier.slice(2)));
       return nextResolve(pathToFileURL(resolved).href, context);
     }
-    // Относительные импорты внутри src тоже идут без расширения.
-    if ((specifier.startsWith("./") || specifier.startsWith("../")) && context.parentURL?.startsWith("file:")) {
+    // Относительные импорты внутри нашего кода идут без расширения — дописываем его.
+    // Пакеты из node_modules трогать нельзя: у них своя схема разрешения (CommonJS),
+    // и подмена пути ломает их внутренние require.
+    if (
+      (specifier.startsWith("./") || specifier.startsWith("../")) &&
+      context.parentURL?.startsWith("file:") &&
+      !context.parentURL.includes("/node_modules/")
+    ) {
       const parentDir = path.dirname(new URL(context.parentURL).pathname);
       const candidate = resolveFile(path.resolve(parentDir, specifier));
-      if (existsSync(candidate)) {
+      if (existsSync(candidate) && candidate.startsWith(path.dirname(srcDir))) {
         return nextResolve(pathToFileURL(candidate).href, context);
       }
     }

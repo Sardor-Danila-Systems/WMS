@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { DataTable, type DataTableColumn } from "@/shared/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/format";
+import { useI18n } from "@/i18n/client";
 import type { Project } from "@/types";
 import type { ProjectSummary } from "@/server/queries";
 
@@ -14,18 +15,19 @@ export interface ProjectRowData extends Project {
 
 export function ProjectsTable({ projects }: { projects: ProjectRowData[] }) {
   const router = useRouter();
+  const { t, locale } = useI18n();
 
   const columns: DataTableColumn<ProjectRowData>[] = [
     {
       id: "name",
-      header: "Объект",
+      header: t.operations.project,
       accessor: (p) => (
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium">{p.name}</span>
             {!p.isActive && (
               <Badge variant="outline" className="shrink-0 text-[10px]">
-                Закрыт
+                {t.projects.closed}
               </Badge>
             )}
           </div>
@@ -36,7 +38,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRowData[] }) {
     },
     {
       id: "foremen",
-      header: "Бригад",
+      header: t.projects.brigades,
       accessor: (p) => <span className="tabular-nums">{p.summary.foremenCount}</span>,
       sortValue: (p) => p.summary.foremenCount,
       className: "text-right",
@@ -44,7 +46,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRowData[] }) {
     },
     {
       id: "materials",
-      header: "Материалов",
+      header: t.projects.materialsCount,
       accessor: (p) => <span className="tabular-nums">{p.summary.materialCount}</span>,
       sortValue: (p) => p.summary.materialCount,
       className: "text-right",
@@ -52,7 +54,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRowData[] }) {
     },
     {
       id: "issued",
-      header: "Выдач",
+      header: t.projects.issues,
       accessor: (p) => <span className="tabular-nums">{p.summary.issueCount}</span>,
       sortValue: (p) => p.summary.issueCount,
       className: "text-right",
@@ -60,7 +62,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRowData[] }) {
     },
     {
       id: "used",
-      header: "Списаний",
+      header: t.projects.usages,
       accessor: (p) => (
         <span className="tabular-nums text-muted-foreground">{p.summary.usageCount}</span>
       ),
@@ -70,7 +72,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRowData[] }) {
     },
     {
       id: "movements",
-      header: "Операций",
+      header: t.projects.operations,
       accessor: (p) => <span className="tabular-nums text-muted-foreground">{p.summary.movementCount}</span>,
       sortValue: (p) => p.summary.movementCount,
       className: "text-right",
@@ -78,10 +80,10 @@ export function ProjectsTable({ projects }: { projects: ProjectRowData[] }) {
     },
     {
       id: "last",
-      header: "Последняя операция",
+      header: t.projects.lastOperation,
       accessor: (p) => (
         <span className="whitespace-nowrap text-muted-foreground">
-          {p.summary.lastOperationAt ? formatDate(p.summary.lastOperationAt) : "—"}
+          {p.summary.lastOperationAt ? formatDate(p.summary.lastOperationAt, locale) : "—"}
         </span>
       ),
       sortValue: (p) => (p.summary.lastOperationAt ? new Date(p.summary.lastOperationAt).getTime() : 0),
@@ -94,8 +96,17 @@ export function ProjectsTable({ projects }: { projects: ProjectRowData[] }) {
       data={projects}
       rowKey={(p) => p.id}
       pageSize={12}
-      emptyMessage="Объекты не заведены"
+      emptyMessage={t.projects.notFound}
       onRowClick={(p) => router.push(`/projects/${p.id}`)}
+      mobileCard={(p) => ({
+        title: p.name,
+        subtitle: p.address || "—",
+        trailing: (
+          <div className="text-xs text-muted-foreground">
+            {t.projects.operations}: <span className="tabular-nums">{p.summary.movementCount}</span>
+          </div>
+        ),
+      })}
     />
   );
 }

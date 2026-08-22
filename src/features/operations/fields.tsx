@@ -5,6 +5,8 @@ import type { Control, FieldValues, Path } from "react-hook-form";
 import { Controller } from "react-hook-form";
 
 import { FormField } from "@/shared/components/form-field";
+import { useI18n } from "@/i18n/client";
+import { formatNumber } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -34,7 +36,7 @@ export function SelectField<T extends FieldValues>({
   required,
   error,
   disabled,
-  emptyMessage = "Нет доступных вариантов",
+  emptyMessage,
   children,
 }: {
   control: Control<T>;
@@ -48,6 +50,9 @@ export function SelectField<T extends FieldValues>({
   emptyMessage?: string;
   children?: ReactNode;
 }) {
+  const { t } = useI18n();
+  const noOptions = emptyMessage ?? t.operations.noOptions;
+
   // Base UI показывает в поле «сырое» значение, если не передать карту
   // «значение → подпись». Без неё в поле выводился бы идентификатор материала.
   const itemLabels = Object.fromEntries(options.map((option) => [option.value, option.label]));
@@ -65,7 +70,7 @@ export function SelectField<T extends FieldValues>({
             items={itemLabels}
           >
             <SelectTrigger className="w-full" aria-invalid={Boolean(error)}>
-              <SelectValue placeholder={options.length === 0 ? emptyMessage : placeholder} />
+              <SelectValue placeholder={options.length === 0 ? noOptions : placeholder} />
             </SelectTrigger>
             <SelectContent>
               {options.map((option) => (
@@ -126,12 +131,13 @@ export function AvailableHint({
   unit: string;
   label: string;
 }) {
+  const { locale } = useI18n();
   const isEmpty = available <= 0;
   return (
     <p className={isEmpty ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
       {label}:{" "}
       <span className="font-medium tabular-nums">
-        {new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 3 }).format(available)} {unit}
+        {formatNumber(available, locale)} {unit}
       </span>
     </p>
   );

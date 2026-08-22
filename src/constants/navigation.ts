@@ -14,10 +14,11 @@ import {
   Building2,
 } from "lucide-react";
 
+import type { Dictionary } from "@/i18n/types";
 import type { Role } from "@/types";
 
 export interface NavItem {
-  label: string;
+  key: keyof Dictionary["nav"];
   href: string;
   icon: LucideIcon;
   /** Если задано — пункт виден только этим ролям. */
@@ -25,7 +26,7 @@ export interface NavItem {
 }
 
 export interface NavGroup {
-  label: string;
+  key: keyof Dictionary["nav"]["groups"];
   items: NavItem[];
 }
 
@@ -35,35 +36,35 @@ export interface NavGroup {
  */
 export const NAV_GROUPS: NavGroup[] = [
   {
-    label: "Обзор",
+    key: "overview",
     items: [
-      { label: "Дашборд", href: "/", icon: LayoutDashboard },
-      { label: "Материалы", href: "/materials", icon: Package },
+      { key: "dashboard", href: "/", icon: LayoutDashboard },
+      { key: "materials", href: "/materials", icon: Package },
     ],
   },
   {
-    label: "Операции",
+    key: "operations",
     items: [
-      { label: "Поступления", href: "/receipts", icon: TruckIcon },
-      { label: "Выдачи", href: "/issues", icon: PackageMinus },
-      { label: "Использование", href: "/usage", icon: Hammer },
-      { label: "Возвраты", href: "/returns", icon: Undo2 },
-      { label: "История операций", href: "/history", icon: History },
+      { key: "receipts", href: "/receipts", icon: TruckIcon },
+      { key: "issues", href: "/issues", icon: PackageMinus },
+      { key: "usage", href: "/usage", icon: Hammer },
+      { key: "returns", href: "/returns", icon: Undo2 },
+      { key: "history", href: "/history", icon: History },
     ],
   },
   {
-    label: "Справочники",
+    key: "directories",
     items: [
-      { label: "Бригадиры", href: "/foremen", icon: HardHat },
-      { label: "Объекты", href: "/projects", icon: Building2 },
-      { label: "Сотрудники", href: "/workers", icon: Users, roles: ["ADMIN"] },
+      { key: "foremen", href: "/foremen", icon: HardHat },
+      { key: "projects", href: "/projects", icon: Building2 },
+      { key: "workers", href: "/workers", icon: Users, roles: ["ADMIN"] },
     ],
   },
   {
-    label: "Аналитика",
+    key: "analytics",
     items: [
-      { label: "Отчёты", href: "/reports", icon: FileBarChart },
-      { label: "Настройки", href: "/settings", icon: Settings, roles: ["ADMIN"] },
+      { key: "reports", href: "/reports", icon: FileBarChart },
+      { key: "settings", href: "/settings", icon: Settings, roles: ["ADMIN"] },
     ],
   },
 ];
@@ -77,11 +78,16 @@ export function visibleGroups(role: Role): NavGroup[] {
   })).filter((group) => group.items.length > 0);
 }
 
-/** Заголовок текущего раздела для верхней панели. */
-export function sectionLabel(pathname: string): string {
-  if (pathname === "/") return "Дашборд";
+/** Ключ текущего раздела для заголовка верхней панели. */
+export function sectionKey(pathname: string): keyof Dictionary["nav"] {
+  if (pathname === "/") return "dashboard";
   const match = [...NAV_ITEMS]
     .sort((a, b) => b.href.length - a.href.length)
     .find((item) => item.href !== "/" && pathname.startsWith(item.href));
-  return match?.label ?? "СтройСклад";
+  return match?.key ?? "dashboard";
+}
+
+export function isNavItemActive(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(`${href}/`);
 }

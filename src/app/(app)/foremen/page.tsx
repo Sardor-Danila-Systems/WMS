@@ -2,10 +2,17 @@ import { PageHeader } from "@/shared/components/page-header";
 import { ForemenTable } from "@/features/foremen/foremen-table";
 import { ForemanFormDialog } from "@/features/foremen/foreman-form-dialog";
 import { getForemenSummaries, listForemen, listProjects } from "@/server/queries";
+import { getDictionary } from "@/i18n/server";
 
 export default async function ForemenPage() {
-  const summaries = getForemenSummaries();
-  const foremen = listForemen().map((foreman) => ({
+  const [t, summaries, list, projects] = await Promise.all([
+    getDictionary(),
+    getForemenSummaries(),
+    listForemen(),
+    listProjects(),
+  ]);
+
+  const foremen = list.map((foreman) => ({
     ...foreman,
     summary: summaries.get(foreman.id) ?? {
       foremanId: foreman.id,
@@ -20,9 +27,9 @@ export default async function ForemenPage() {
   return (
     <div>
       <PageHeader
-        title="Бригадиры"
-        description="Кто получает материалы со склада и что сейчас числится за каждым"
-        actions={<ForemanFormDialog projects={listProjects()} />}
+        title={t.foremen.title}
+        description={t.foremen.subtitle}
+        actions={<ForemanFormDialog projects={projects} />}
       />
       <ForemenTable foremen={foremen} />
     </div>

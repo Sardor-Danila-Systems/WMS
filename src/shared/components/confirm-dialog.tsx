@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { useT } from "@/i18n/client";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -25,7 +26,7 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmLabel = "Удалить",
+  confirmLabel,
   successMessage,
   action,
   children,
@@ -39,6 +40,7 @@ export function ConfirmDialog({
   action: () => Promise<ActionResult<unknown>>;
   children?: ReactNode;
 }) {
+  const t = useT();
   const [isPending, setIsPending] = useState(false);
 
   async function handleConfirm() {
@@ -52,7 +54,7 @@ export function ConfirmDialog({
       toast.success(successMessage);
       onOpenChange(false);
     } catch {
-      toast.error("Сервер недоступен. Попробуйте ещё раз.");
+      toast.error(t.common.serverUnavailable);
     } finally {
       setIsPending(false);
     }
@@ -71,10 +73,10 @@ export function ConfirmDialog({
         {children}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            Отмена
+            {t.common.cancel}
           </Button>
           <Button variant="destructive" onClick={handleConfirm} disabled={isPending}>
-            {isPending ? "Выполняем..." : confirmLabel}
+            {isPending ? t.common.deleting : (confirmLabel ?? t.common.delete)}
           </Button>
         </DialogFooter>
       </DialogContent>

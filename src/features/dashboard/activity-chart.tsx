@@ -3,7 +3,10 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MOVEMENT_META } from "@/constants/colors";
+import { MOVEMENT_COLORS } from "@/constants/colors";
+import { useI18n } from "@/i18n/client";
+import { formatLongDate } from "@/lib/format";
+import type { Locale } from "@/i18n/types";
 import type { DailyActivity } from "@/server/queries";
 
 const SERIES = [
@@ -22,19 +25,21 @@ function ActivityTooltip({
   active,
   payload,
   label,
+  locale,
 }: {
   active?: boolean;
   payload?: { name: string; value: number; color: string }[];
   label?: string;
+  locale: Locale;
 }) {
   if (!active || !payload?.length) return null;
   const total = payload.reduce((sum, entry) => sum + entry.value, 0);
   if (total === 0) return null;
 
   return (
-    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md">
+    <div className="rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-sm">
       <div className="mb-1.5 font-medium text-popover-foreground">
-        {label ? new Date(label).toLocaleDateString("ru-RU", { day: "2-digit", month: "long" }) : ""}
+        {label ? formatLongDate(label, locale) : ""}
       </div>
       <div className="space-y-1">
         {payload
@@ -54,18 +59,19 @@ function ActivityTooltip({
 }
 
 export function ActivityChart({ data }: { data: DailyActivity[] }) {
+  const { t, locale } = useI18n();
   return (
     <Card>
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-        <CardTitle className="text-sm font-semibold">Операции за 14 дней</CardTitle>
+        <CardTitle className="text-[13px] font-semibold">{t.dashboard.chartTitle}</CardTitle>
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           {SERIES.map((series) => (
             <span key={series.key} className="flex items-center gap-1.5">
               <span
                 className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: MOVEMENT_META[series.type].color }}
+                style={{ backgroundColor: MOVEMENT_COLORS[series.type].color }}
               />
-              {MOVEMENT_META[series.type].label}
+              {t.movements[series.type]}
             </span>
           ))}
         </div>
@@ -74,30 +80,30 @@ export function ActivityChart({ data }: { data: DailyActivity[] }) {
         <div className="h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} barGap={2} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-              <CartesianGrid vertical={false} stroke="#e1e0d9" strokeDasharray="3 3" />
+              <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
               <XAxis
                 dataKey="day"
                 tickFormatter={shortDate}
                 tickLine={false}
                 axisLine={false}
-                tick={{ fill: "#898781", fontSize: 11 }}
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                 interval="preserveStartEnd"
                 minTickGap={16}
               />
               <YAxis
                 tickLine={false}
                 axisLine={false}
-                tick={{ fill: "#898781", fontSize: 11 }}
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                 width={32}
                 allowDecimals={false}
               />
-              <Tooltip cursor={{ fill: "rgba(11,11,11,0.04)" }} content={<ActivityTooltip />} />
+              <Tooltip cursor={{ fill: "rgba(11,11,11,0.04)" }} content={<ActivityTooltip locale={locale} />} />
               {SERIES.map((series) => (
                 <Bar
                   key={series.key}
                   dataKey={series.key}
-                  name={MOVEMENT_META[series.type].label}
-                  fill={MOVEMENT_META[series.type].color}
+                  name={t.movements[series.type]}
+                  fill={MOVEMENT_COLORS[series.type].color}
                   radius={[3, 3, 0, 0]}
                   maxBarSize={12}
                 />

@@ -10,6 +10,8 @@ import {
   listMovements,
   listProjects,
 } from "@/server/queries";
+import { getDictionary, getLocale } from "@/i18n/server";
+import { translateValue } from "@/i18n";
 import { formatQuantity } from "@/lib/format";
 import { StatCard } from "@/shared/components/stat-card";
 import { EmptyState } from "@/shared/components/empty-state";
@@ -23,33 +25,42 @@ import { getOperationRefData } from "@/server/ref-data";
 
 export default async function ForemanDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const foreman = getForeman(id);
+  const foreman = await getForeman(id);
   if (!foreman) notFound();
 
-  const stock = getForemanStock(id);
-  const materialTotals = getForemanMaterialTotals(id);
-  const summary = getForemenSummaries().get(id);
-  const movements = listMovements({ foremanId: id });
-  const refData = getOperationRefData();
+  const [t, locale, stock, materialTotals, summaries, movements, refData, projects] =
+    await Promise.all([
+      getDictionary(),
+      getLocale(),
+      getForemanStock(id),
+      getForemanMaterialTotals(id),
+      getForemenSummaries(),
+      listMovements({ foremanId: id }),
+      getOperationRefData(),
+      listProjects(),
+    ]);
+
+  const summary = summaries.get(id);
+  const unitOf = (unit: string) => translateValue(t.units, unit);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
         <Link
           href="/foremen"
-          className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="mb-3 inline-flex items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Все бригадиры
+          {t.foremen.all}
         </Link>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{foreman.name}</h2>
-              {!foreman.isActive && <Badge variant="outline">Неактивен</Badge>}
+              <h2 className="text-lg font-semibold tracking-tight sm:text-[19px]">{foreman.name}</h2>
+              {!foreman.isActive && <Badge variant="outline">{t.foremen.inactive}</Badge>}
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+            <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-muted-foreground">
               {foreman.brigade && <span>{foreman.brigade}</span>}
               {foreman.projectName && <span>· {foreman.projectName}</span>}
               {foreman.phone && (
@@ -65,109 +76,161 @@ export default async function ForemanDetailPage({ params }: { params: Promise<{ 
             <OperationDialog type="ISSUE" data={refData} variant="outline" />
             <OperationDialog type="USAGE" data={refData} variant="outline" />
             <OperationDialog type="RETURN" data={refData} variant="outline" />
-            <ForemanFormDialog foreman={foreman} projects={listProjects()} />
+            <ForemanFormDialog foreman={foreman} projects={projects} />
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
-          label="Позиций на руках"
+          label={t.foremen.detail.positionsOnHand}
           value={String(stock.length)}
           icon={Boxes}
-          hint={stock.length > 0 ? "Требуют списания или возврата" : "Всё закрыто"}
-          color={stock.length > 0 ? "orange" : "slate"}
+          hint={stock.length > 0 ? t.foremen.detail.needsAction : t.foremen.detail.allClosed}
+          tone={stock.length > 0 ? "warning" : "neutral"}
         />
         <StatCard
-          label="Выдач"
+          label={t.foremen.issueCount}
           value={String(summary?.issueCount ?? 0)}
           icon={PackageMinus}
-          hint="Получал материал со склада"
-          color="blue"
+          hint={t.foremen.detail.issuedHint}
+          tone="accent"
         />
         <StatCard
-          label="Списаний"
+          label={t.foremen.usageCount}
           value={String(summary?.usageCount ?? 0)}
           icon={Hammer}
-          hint="Израсходовано на объектах"
-          color="teal"
+          hint={t.foremen.detail.usedHint}
+          tone="neutral"
         />
         <StatCard
-          label="Возвратов"
+          label={t.foremen.returnCount}
           value={String(summary?.returnCount ?? 0)}
           icon={Undo2}
-          hint="Сдано обратно на склад"
-          color="violet"
+          hint={t.foremen.detail.returnedHint}
+          tone="neutral"
         />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-semibold">Материалы по бригадиру</CardTitle>
-          <CardDescription className="text-xs">
-            Сколько получил, сколько израсходовал, сколько вернул и сколько осталось на руках
-          </CardDescription>
+          <CardTitle className="text-[13px] font-semibold">
+            {t.foremen.detail.materialsTitle}
+          </CardTitle>
+          <CardDescription className="text-xs">{t.foremen.detail.materialsHint}</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-0 sm:px-6">
           {materialTotals.length === 0 ? (
             <EmptyState
-              message="Бригадиру ещё не выдавали материалов"
-              description="Оформите выдачу — и здесь появится расход по каждому материалу"
+              message={t.foremen.detail.noMaterials}
+              description={t.foremen.detail.noMaterialsHint}
             />
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-xs font-medium text-muted-foreground">Материал</TableHead>
-                    <TableHead className="text-right text-xs font-medium text-muted-foreground">Получено</TableHead>
-                    <TableHead className="text-right text-xs font-medium text-muted-foreground">Использовано</TableHead>
-                    <TableHead className="text-right text-xs font-medium text-muted-foreground">Возвращено</TableHead>
-                    <TableHead className="text-right text-xs font-medium text-muted-foreground">На руках</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {materialTotals.map((row) => (
-                    <TableRow key={row.materialId}>
-                      <TableCell>
-                        <Link href={`/materials/${row.materialId}`} className="font-medium hover:underline">
-                          {row.materialName}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatQuantity(row.received, row.unit)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {formatQuantity(row.used, row.unit)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">
-                        {formatQuantity(row.returned, row.unit)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {row.onHand > 0 ? (
-                          <span className="font-semibold tabular-nums text-orange-700">
-                            {formatQuantity(row.onHand, row.unit)}
-                          </span>
-                        ) : (
-                          <span className="tabular-nums text-muted-foreground">0 {row.unit}</span>
-                        )}
-                      </TableCell>
+            <>
+              {/* Телефон: список вместо широкой таблицы */}
+              <div className="divide-y divide-border md:hidden">
+                {materialTotals.map((row) => (
+                  <div key={row.materialId} className="px-4 py-3">
+                    <Link
+                      href={`/materials/${row.materialId}`}
+                      className="text-[13px] font-medium hover:underline"
+                    >
+                      {row.materialName}
+                    </Link>
+                    <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      <dt className="text-muted-foreground">{t.foremen.detail.received}</dt>
+                      <dd className="text-right tabular-nums">
+                        {formatQuantity(row.received, unitOf(row.unit), locale)}
+                      </dd>
+                      <dt className="text-muted-foreground">{t.foremen.detail.used}</dt>
+                      <dd className="text-right tabular-nums">
+                        {formatQuantity(row.used, unitOf(row.unit), locale)}
+                      </dd>
+                      <dt className="text-muted-foreground">{t.foremen.detail.returned}</dt>
+                      <dd className="text-right tabular-nums">
+                        {formatQuantity(row.returned, unitOf(row.unit), locale)}
+                      </dd>
+                      <dt className="font-medium">{t.foremen.detail.onHand}</dt>
+                      <dd
+                        className={
+                          row.onHand > 0
+                            ? "text-right font-semibold tabular-nums text-[#9c4d16]"
+                            : "text-right tabular-nums text-muted-foreground"
+                        }
+                      >
+                        {formatQuantity(row.onHand, unitOf(row.unit), locale)}
+                      </dd>
+                    </dl>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hidden overflow-x-auto md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="text-[11px] font-medium uppercase text-muted-foreground">
+                        {t.operations.material}
+                      </TableHead>
+                      <TableHead className="text-right text-[11px] font-medium uppercase text-muted-foreground">
+                        {t.foremen.detail.received}
+                      </TableHead>
+                      <TableHead className="text-right text-[11px] font-medium uppercase text-muted-foreground">
+                        {t.foremen.detail.used}
+                      </TableHead>
+                      <TableHead className="text-right text-[11px] font-medium uppercase text-muted-foreground">
+                        {t.foremen.detail.returned}
+                      </TableHead>
+                      <TableHead className="text-right text-[11px] font-medium uppercase text-muted-foreground">
+                        {t.foremen.detail.onHand}
+                      </TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {materialTotals.map((row) => (
+                      <TableRow key={row.materialId} className="text-[13px]">
+                        <TableCell>
+                          <Link href={`/materials/${row.materialId}`} className="font-medium hover:underline">
+                            {row.materialName}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatQuantity(row.received, unitOf(row.unit), locale)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {formatQuantity(row.used, unitOf(row.unit), locale)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">
+                          {formatQuantity(row.returned, unitOf(row.unit), locale)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {row.onHand > 0 ? (
+                            <span className="font-semibold tabular-nums text-[#9c4d16]">
+                              {formatQuantity(row.onHand, unitOf(row.unit), locale)}
+                            </span>
+                          ) : (
+                            <span className="tabular-nums text-muted-foreground">
+                              {formatQuantity(0, unitOf(row.unit), locale)}
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
 
       <div>
-        <h3 className="mb-3 text-sm font-semibold">История операций бригадира</h3>
+        <h3 className="mb-2.5 text-[13px] font-semibold">{t.foremen.detail.history}</h3>
         <MovementsTable
           movements={movements}
           columns={["type", "date", "material", "quantity", "project", "user", "reason", "comment"]}
           pageSize={10}
-          emptyMessage="Операций по бригадиру ещё не было"
+          emptyMessage={t.foremen.detail.noHistory}
           exportName={`brigadir-${foreman.name}`}
         />
       </div>

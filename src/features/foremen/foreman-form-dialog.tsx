@@ -9,6 +9,7 @@ import type { z } from "zod";
 import { saveForeman } from "@/app/actions/catalog";
 import { foremanSchema } from "@/lib/validation";
 import { FormField } from "@/shared/components/form-field";
+import { useT } from "@/i18n/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +34,7 @@ export function ForemanFormDialog({
   foreman?: Foreman;
   projects: Project[];
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const isEdit = Boolean(foreman);
 
@@ -57,7 +59,7 @@ export function ForemanFormDialog({
   const { submit, isPending } = useActionSubmit<Values>({
     action: saveForeman,
     setError,
-    successTitle: isEdit ? "Данные бригадира обновлены" : "Бригадир добавлен",
+    successTitle: isEdit ? t.foremen.saved : t.foremen.created,
     onSuccess: () => {
       setOpen(false);
       if (!isEdit) reset();
@@ -70,14 +72,14 @@ export function ForemanFormDialog({
         render={<Button size="sm" variant={isEdit ? "outline" : "default"} className="gap-1.5" />}
       >
         {isEdit ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-        {isEdit ? "Редактировать" : "Добавить бригадира"}
+        {isEdit ? t.common.edit : t.foremen.add}
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Редактирование бригадира" : "Новый бригадир"}</DialogTitle>
+          <DialogTitle>{isEdit ? t.foremen.edit : t.foremen.create}</DialogTitle>
           <DialogDescription>
-            Бригадир получает материалы со склада и отчитывается за их расход.
+            {t.foremen.hint}
           </DialogDescription>
         </DialogHeader>
 
@@ -85,9 +87,9 @@ export function ForemanFormDialog({
           onSubmit={handleSubmit((values) => submit({ ...values, id: foreman?.id }))}
           className="space-y-4"
         >
-          <FormField label="ФИО" required error={errors.name?.message}>
+          <FormField label={t.foremen.fullName} required error={errors.name?.message}>
             <Input
-              placeholder="Например, Александр Быков"
+              placeholder={t.foremen.namePlaceholder}
               autoFocus
               disabled={isPending}
               aria-invalid={Boolean(errors.name)}
@@ -96,27 +98,27 @@ export function ForemanFormDialog({
           </FormField>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Телефон" error={errors.phone?.message}>
-              <Input placeholder="+7 (900) 000-00-00" disabled={isPending} {...register("phone")} />
+            <FormField label={t.foremen.phone} error={errors.phone?.message}>
+              <Input placeholder={t.foremen.phonePlaceholder} disabled={isPending} {...register("phone")} />
             </FormField>
 
-            <FormField label="Бригада" error={errors.brigade?.message}>
-              <Input placeholder="Бригада №1" disabled={isPending} {...register("brigade")} />
+            <FormField label={t.foremen.brigade} error={errors.brigade?.message}>
+              <Input placeholder={t.foremen.brigadePlaceholder} disabled={isPending} {...register("brigade")} />
             </FormField>
           </div>
 
           <SelectField
             control={control}
             name="projectId"
-            label="Объект"
-            placeholder="Где работает бригада"
+            label={t.operations.project}
+            placeholder={t.foremen.projectPlaceholder}
             error={errors.projectId?.message}
             disabled={isPending}
             options={projects.map((p) => ({ value: p.id, label: p.name }))}
           />
 
           {isEdit && (
-            <FormField label="Статус">
+            <FormField label={t.common.status}>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -124,14 +126,14 @@ export function ForemanFormDialog({
                   disabled={isPending}
                   {...register("isActive")}
                 />
-                Активен — может получать материалы
+                {t.foremen.activeLabel}
               </label>
             </FormField>
           )}
 
           <DialogFooter>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Сохраняем..." : isEdit ? "Сохранить" : "Добавить"}
+              {isPending ? t.common.saving : isEdit ? t.common.save : t.common.add}
             </Button>
           </DialogFooter>
         </form>

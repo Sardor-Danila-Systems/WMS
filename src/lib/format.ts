@@ -1,13 +1,24 @@
-export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("ru-RU", {
+import type { Locale } from "@/i18n/types";
+
+const INTL_LOCALE: Record<Locale, string> = {
+  ru: "ru-RU",
+  uz: "uz-UZ",
+};
+
+function intl(locale: Locale = "ru"): string {
+  return INTL_LOCALE[locale] ?? INTL_LOCALE.ru;
+}
+
+export function formatDate(iso: string, locale: Locale = "ru"): string {
+  return new Date(iso).toLocaleDateString(intl(locale), {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   });
 }
 
-export function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("ru-RU", {
+export function formatDateTime(iso: string, locale: Locale = "ru"): string {
+  return new Date(iso).toLocaleString(intl(locale), {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -16,17 +27,23 @@ export function formatDateTime(iso: string): string {
   });
 }
 
-export function formatNumber(value: number): string {
-  return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 }).format(value);
+export function formatLongDate(iso: string, locale: Locale = "ru"): string {
+  return new Date(iso).toLocaleDateString(intl(locale), { day: "2-digit", month: "long" });
 }
 
-export function formatQuantity(value: number, unit: string): string {
-  return `${formatNumber(value)} ${unit}`;
+export function formatNumber(value: number, locale: Locale = "ru"): string {
+  return new Intl.NumberFormat(intl(locale), { maximumFractionDigits: 3 }).format(value);
+}
+
+/** Количество с единицей измерения; единица уже должна быть переведена. */
+export function formatQuantity(value: number, unit: string, locale: Locale = "ru"): string {
+  return `${formatNumber(value, locale)} ${unit}`;
 }
 
 /**
- * Правильное окончание русского слова при числе:
- * 1 позиция, 2 позиции, 5 позиций.
+ * Правильное окончание слова при числе.
+ * В русском три формы (1 позиция / 2 позиции / 5 позиций),
+ * в узбекском форма одна — поэтому там все три варианта совпадают.
  */
 export function declOf(count: number, one: string, few: string, many: string): string {
   const mod100 = Math.abs(count) % 100;

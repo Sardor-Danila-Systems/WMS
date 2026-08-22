@@ -1,7 +1,11 @@
+"use client";
+
 import { ArrowDownToLine, ArrowUpFromLine, Hammer, RotateCcw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { MOVEMENT_META, STOCK_STATUS, type StockStatus } from "@/constants/colors";
+import { MOVEMENT_COLORS, STOCK_STATUS_COLORS, type StockStatus } from "@/constants/colors";
+import { useI18n } from "@/i18n/client";
+import { formatNumber } from "@/lib/format";
 import type { MovementType } from "@/types";
 
 const MOVEMENT_ICONS: Record<MovementType, typeof ArrowDownToLine> = {
@@ -12,52 +16,55 @@ const MOVEMENT_ICONS: Record<MovementType, typeof ArrowDownToLine> = {
 };
 
 export function MovementTypeBadge({ type }: { type: MovementType }) {
-  const meta = MOVEMENT_META[type];
+  const { t } = useI18n();
+  const style = MOVEMENT_COLORS[type];
   const Icon = MOVEMENT_ICONS[type];
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium",
-        meta.bg,
-        meta.text,
-        meta.border
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium",
+        style.bg,
+        style.text,
+        style.border
       )}
     >
       <Icon className="h-3 w-3" />
-      {meta.label}
+      {t.movements[type]}
     </span>
   );
 }
 
 export function StockStatusBadge({ status }: { status: StockStatus }) {
-  const meta = STOCK_STATUS[status];
+  const { t } = useI18n();
+  const style = STOCK_STATUS_COLORS[status];
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium",
-        meta.bg,
-        meta.text
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-medium",
+        style.bg,
+        style.text
       )}
     >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: meta.color }} />
-      {meta.label}
+      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: style.color }} />
+      {t.stockStatus[status]}
     </span>
   );
 }
 
 /** Показывает знак и величину изменения остатка: +120 / −40. */
 export function DeltaValue({ value, unit }: { value: number; unit?: string }) {
+  const { locale } = useI18n();
   if (value === 0) return <span className="text-muted-foreground">—</span>;
   const positive = value > 0;
   return (
     <span
       className={cn(
         "whitespace-nowrap font-medium tabular-nums",
-        positive ? "text-green-700" : "text-red-700"
+        positive ? "text-[#256d3c]" : "text-[#9c2f2f]"
       )}
     >
       {positive ? "+" : "−"}
-      {new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 3 }).format(Math.abs(value))}
+      {formatNumber(Math.abs(value), locale)}
       {unit ? ` ${unit}` : ""}
     </span>
   );

@@ -2,7 +2,7 @@ import "@/lib/server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { execute, getDb, queryAll, queryOne, transaction } from "./client";
+import { queryAll, queryOne, transaction } from "./client";
 import { createRng, pick, randInt } from "./rng";
 import { MATERIALS_SEED } from "./seed-materials";
 import { FOREMEN_SEED, PROJECTS_SEED, SUPPLIERS_SEED, USERS_SEED } from "./seed-people";
@@ -69,8 +69,8 @@ function roundForUnit(unit: string, value: number): number {
 
 const DAYS_OF_HISTORY = 45;
 
-export function isDatabaseSeeded(): boolean {
-  const row = queryOne<{ c: number }>("SELECT COUNT(*) AS c FROM users");
+export async function isDatabaseSeeded(): Promise<boolean> {
+  const row = await queryOne<{ c: number }>("SELECT COUNT(*)::int AS c FROM users");
   return (row?.c ?? 0) > 0;
 }
 
@@ -97,8 +97,8 @@ export interface SeedResult {
  * (`recordMovementInTx`), поэтому сгенерированные остатки по определению
  * согласованы с журналом движений — никаких «нарисованных» чисел.
  */
-export function seedDatabase(options: SeedOptions = {}): SeedResult {
-  return transaction(() => {
+export async function seedDatabase(options: SeedOptions = {}): Promise<SeedResult> {
+  return transaction(async (tx) => {
     if (options.reset) {
       // Порядок важен: сначала зависимые таблицы, потом справочники.
       for (const table of [
@@ -112,7 +112,7 @@ export function seedDatabase(options: SeedOptions = {}): SeedResult {
         "users",
         "settings",
       ]) {
-        execute(`DELETE FROM ${table}`);
+        await tx.run(`DELETE FROM ${table}`);
       }
     }
 
@@ -123,7 +123,7 @@ export function seedDatabase(options: SeedOptions = {}): SeedResult {
     const userIds: string[] = [];
     for (const user of USERS_SEED) {
       const id = randomUUID();
-      execute(
+      await tx.run(
         `INSERT INTO users (id, username, password_hash, full_name, position, phone, role, is_active, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
         id,
@@ -142,7 +142,7 @@ export function seedDatabase(options: SeedOptions = {}): SeedResult {
     const projectIds: string[] = [];
     for (const project of PROJECTS_SEED) {
       const id = randomUUID();
-      execute(
+      await tx.run(
         "INSERT INTO projects (id, name, address, is_active, created_at) VALUES (?, ?, ?, 1, ?)",
         id,
         project.name,
@@ -156,7 +156,7 @@ export function seedDatabase(options: SeedOptions = {}): SeedResult {
     const supplierIds: string[] = [];
     for (const supplier of SUPPLIERS_SEED) {
       const id = randomUUID();
-      execute(
+      await tx.run(
         "INSERT INTO suppliers (id, name, contact, is_active, created_at) VALUES (?, ?, ?, 1, ?)",
         id,
         supplier.name,
@@ -172,7 +172,7 @@ export function seedDatabase(options: SeedOptions = {}): SeedResult {
     for (const foreman of FOREMEN_SEED) {
       const id = randomUUID();
       const projectId = projectIds[foreman.projectIndex] ?? null;
-      execute(
+      await tx.run(
         "INSERT INTO foremen (id, name, phone, brigade, project_id, is_active, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)",
         id,
         foreman.name,
@@ -191,7 +191,7 @@ export function seedDatabase(options: SeedOptions = {}): SeedResult {
     const createdAt = new Date(Date.now() - DAYS_OF_HISTORY * 86_400_000).toISOString();
     for (const material of MATERIALS_SEED) {
       const id = randomUUID();
-      execute(
+      await tx.run(
         `INSERT INTO materials (id, name, category, unit, quantity, min_stock, is_active, created_at, updated_at)
          VALUES (?, ?, ?, ?, 0, ?, 1, ?, ?)`,
         id,
@@ -226,9 +226,9 @@ export function seedDatabase(options: SeedOptions = {}): SeedResult {
     const atForeman = new Map<string, number>(); // ключ: `${foremanId}:${materialId}`
 
     let movements = 0;
-    const record = (input: Parameters<typeof recordMovementInTx>[0]) => {
+    const record = async (input: Parameters<typeof recordMovementInTx>[1]) => {
       try {
-        recordMovementInTx(input);
+        await recordMovementInTx(tx, input);
         movements++;
         return true;
       } catch (error) {
@@ -245,7 +245,7 @@ export function seedDatabase(options: SeedOptions = {}): SeedResult {
       const meta = materialById.get(materialId)!;
       const qty = roundForUnit(meta.unit, meta.minStock * (2.5 + rng() * 2.5));
       if (
-        record({
+        await record({
           type: "RECEIPT",
           materialId,
           quantity: qty,
@@ -284,7 +284,7 @@ export function seedDatabase(options: SeedOptions = {}): SeedResult {
           const [min, max] = RECEIPT_RANGE[unit];
           const qty = roundForUnit(unit, randInt(rng, min, max));
           if (
-            record({
+            await record({
               type: "RECEIPT",
               materialId,
               quantity: qty,
@@ -308,7 +308,7 @@ export function seedDatabase(options: SeedOptions = {}): SeedResult {
           const qty = Math.min(roundForUnit(unit, randInt(rng, min, max) * 0.35), stock);
           if (qty <= 0) continue;
           if (
-            record({
+            await record({
               type: "ISSUE",
               materialId,
               quantity: qty,
@@ -331,7 +331,7 @@ export function seedDatabase(options: SeedOptions = {}): SeedResult {
           const qty = Math.min(roundForUnit(unit, held * (0.35 + rng() * 0.5)), held);
           if (qty <= 0) continue;
           if (
-            record({
+            await record({
               type: "USAGE",
               materialId,
               quantity: qty,
@@ -352,7 +352,7 @@ export function seedDatabase(options: SeedOptions = {}): SeedResult {
           const qty = Math.min(roundForUnit(unit, held * (0.2 + rng() * 0.5)), held);
           if (qty <= 0) continue;
           if (
-            record({
+            await record({
               type: "RETURN",
               materialId,
               quantity: qty,
@@ -369,15 +369,15 @@ export function seedDatabase(options: SeedOptions = {}): SeedResult {
       }
     }
 
-    execute(
+    await tx.run(
       "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
       "company_name",
-      "ООО «СтройХолдинг»"
+      "Gagarin Avenue"
     );
-    execute(
+    await tx.run(
       "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
       "warehouse_address",
-      "г. Москва, Складской проезд, д. 12"
+      "Toshkent sh., Gagarin ko'chasi, 12"
     );
 
     return { ...base, movements };
@@ -385,23 +385,25 @@ export function seedDatabase(options: SeedOptions = {}): SeedResult {
 }
 
 /** Заполняет базу при первом запуске, если она пустая. */
-export function ensureSeeded(): void {
-  if (!isDatabaseSeeded()) {
-    seedDatabase();
+export async function ensureSeeded(): Promise<void> {
+  if (!(await isDatabaseSeeded())) {
+    await seedDatabase();
   }
 }
 
 /** Диагностика для скриптов: сводка по содержимому базы. */
-export function describeDatabase(): Record<string, number> {
+export async function describeDatabase(): Promise<Record<string, number>> {
   const tables = ["users", "projects", "suppliers", "foremen", "materials", "stock_movements", "foreman_stock"];
   const result: Record<string, number> = {};
   for (const table of tables) {
-    result[table] = queryOne<{ c: number }>(`SELECT COUNT(*) AS c FROM ${table}`)?.c ?? 0;
+    result[table] = (await queryOne<{ c: number }>(`SELECT COUNT(*)::int AS c FROM ${table}`))?.c ?? 0;
   }
   return result;
 }
 
-export function listTableNames(): string[] {
-  getDb();
-  return queryAll<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'").map((r) => r.name);
+export async function listTableNames(): Promise<string[]> {
+  const rows = await queryAll<{ name: string }>(
+    "SELECT tablename AS name FROM pg_tables WHERE schemaname = 'public'"
+  );
+  return rows.map((r) => r.name);
 }

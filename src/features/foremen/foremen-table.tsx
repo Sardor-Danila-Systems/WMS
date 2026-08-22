@@ -8,6 +8,7 @@ import { DataTable, type DataTableColumn } from "@/shared/components/data-table"
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { declOf, formatDate } from "@/lib/format";
+import { useI18n } from "@/i18n/client";
 import type { Foreman } from "@/types";
 import type { ForemanSummary } from "@/server/queries";
 
@@ -17,6 +18,7 @@ export interface ForemanRowData extends Foreman {
 
 export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
   const router = useRouter();
+  const { t, locale } = useI18n();
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
@@ -32,7 +34,7 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
   const columns: DataTableColumn<ForemanRowData>[] = [
     {
       id: "name",
-      header: "Бригадир",
+      header: t.operations.foreman,
       accessor: (f) => (
         <div className="min-w-0">
           <div className="truncate font-medium">{f.name}</div>
@@ -43,7 +45,7 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
     },
     {
       id: "project",
-      header: "Объект",
+      header: t.operations.project,
       accessor: (f) => (
         <span className="text-muted-foreground">{f.projectName ?? "—"}</span>
       ),
@@ -51,25 +53,31 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
     },
     {
       id: "phone",
-      header: "Телефон",
+      header: t.foremen.phone,
       accessor: (f) => <span className="whitespace-nowrap text-muted-foreground">{f.phone || "—"}</span>,
     },
     {
       id: "onHand",
-      header: "Материалов на руках",
+      header: t.foremen.onHand,
       accessor: (f) =>
         f.summary.positions > 0 ? (
           <Badge variant="outline" className="border-orange-200 bg-orange-50 text-orange-700">
-            {f.summary.positions} {declOf(f.summary.positions, "позиция", "позиции", "позиций")}
+            {f.summary.positions}{" "}
+            {declOf(
+              f.summary.positions,
+              t.dashboard.positionWord.one,
+              t.dashboard.positionWord.few,
+              t.dashboard.positionWord.many
+            )}
           </Badge>
         ) : (
-          <span className="text-xs text-muted-foreground">Ничего не числится</span>
+          <span className="text-xs text-muted-foreground">{t.foremen.nothingOnHand}</span>
         ),
       sortValue: (f) => f.summary.positions,
     },
     {
       id: "issued",
-      header: "Выдач",
+      header: t.foremen.issueCount,
       accessor: (f) => (
         <span className="tabular-nums text-muted-foreground">{f.summary.issueCount}</span>
       ),
@@ -79,7 +87,7 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
     },
     {
       id: "used",
-      header: "Списаний",
+      header: t.foremen.usageCount,
       accessor: (f) => (
         <span className="tabular-nums text-muted-foreground">{f.summary.usageCount}</span>
       ),
@@ -89,7 +97,7 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
     },
     {
       id: "returned",
-      header: "Возвратов",
+      header: t.foremen.returnCount,
       accessor: (f) => (
         <span className="tabular-nums text-muted-foreground">{f.summary.returnCount}</span>
       ),
@@ -99,10 +107,10 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
     },
     {
       id: "last",
-      header: "Последняя операция",
+      header: t.foremen.lastOperation,
       accessor: (f) => (
         <span className="whitespace-nowrap text-muted-foreground">
-          {f.summary.lastOperationAt ? formatDate(f.summary.lastOperationAt) : "—"}
+          {f.summary.lastOperationAt ? formatDate(f.summary.lastOperationAt, locale) : "—"}
         </span>
       ),
       sortValue: (f) => (f.summary.lastOperationAt ? new Date(f.summary.lastOperationAt).getTime() : 0),
@@ -116,9 +124,9 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Поиск по имени, бригаде, объекту..."
+          placeholder={t.foremen.searchPlaceholder}
           className="pl-8"
-          aria-label="Поиск бригадиров"
+          aria-label={t.common.search}
         />
       </div>
 
@@ -127,8 +135,23 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
         data={filtered}
         rowKey={(f) => f.id}
         pageSize={12}
-        emptyMessage="Бригадиры не найдены"
+        emptyMessage={t.foremen.notFound}
         onRowClick={(f) => router.push(`/foremen/${f.id}`)}
+        mobileCard={(f) => ({
+          title: f.name,
+          subtitle: (
+            <>
+              {f.brigade || "—"}
+              {f.projectName && ` · ${f.projectName}`}
+            </>
+          ),
+          trailing:
+            f.summary.positions > 0 ? (
+              <Badge variant="outline" className="border-[#f3ddc4] bg-[#fdf2e9] text-[#9c4d16]">
+                {f.summary.positions}
+              </Badge>
+            ) : null,
+        })}
       />
     </div>
   );

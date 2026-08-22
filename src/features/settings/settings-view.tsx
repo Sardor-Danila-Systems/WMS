@@ -9,8 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FormField } from "@/shared/components/form-field";
+import { LanguageSwitch } from "@/components/layout/language-switch";
 import { CATEGORIES, UNITS } from "@/constants/categories";
-import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLE_OPTIONS } from "@/constants/roles";
+import { useT } from "@/i18n/client";
+import { translateValue } from "@/i18n";
+import type { Role } from "@/types";
+
+const ROLE_ORDER: Role[] = ["ADMIN", "WAREHOUSE_WORKER"];
 
 export function SettingsView({
   companyName: initialCompanyName,
@@ -19,6 +24,7 @@ export function SettingsView({
   companyName: string;
   warehouseAddress: string;
 }) {
+  const t = useT();
   const [companyName, setCompanyName] = useState(initialCompanyName);
   const [warehouseAddress, setWarehouseAddress] = useState(initialAddress);
   const [isPending, setIsPending] = useState(false);
@@ -35,9 +41,9 @@ export function SettingsView({
         toast.error(result.error);
         return;
       }
-      toast.success("Настройки сохранены");
+      toast.success(t.settings.saved);
     } catch {
-      toast.error("Сервер недоступен. Попробуйте ещё раз.");
+      toast.error(t.common.serverUnavailable);
     } finally {
       setIsPending(false);
     }
@@ -47,19 +53,29 @@ export function SettingsView({
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-semibold">Организация</CardTitle>
-          <CardDescription>Название компании отображается в боковом меню</CardDescription>
+          <CardTitle className="text-[13px] font-semibold">{t.settings.languageTitle}</CardTitle>
+          <CardDescription className="text-xs">{t.settings.languageHint}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LanguageSwitch />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-[13px] font-semibold">{t.settings.orgTitle}</CardTitle>
+          <CardDescription className="text-xs">{t.settings.orgHint}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Название компании">
+            <FormField label={t.settings.companyName}>
               <Input
                 value={companyName}
                 onChange={(event) => setCompanyName(event.target.value)}
                 disabled={isPending}
               />
             </FormField>
-            <FormField label="Адрес склада">
+            <FormField label={t.settings.warehouseAddress}>
               <Input
                 value={warehouseAddress}
                 onChange={(event) => setWarehouseAddress(event.target.value)}
@@ -69,7 +85,7 @@ export function SettingsView({
           </div>
           <div className="flex justify-end">
             <Button onClick={handleSave} disabled={isPending}>
-              {isPending ? "Сохраняем..." : "Сохранить"}
+              {isPending ? t.common.saving : t.common.save}
             </Button>
           </div>
         </CardContent>
@@ -77,14 +93,16 @@ export function SettingsView({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-semibold">Роли и доступ</CardTitle>
-          <CardDescription>Права назначаются сотруднику в разделе «Сотрудники»</CardDescription>
+          <CardTitle className="text-[13px] font-semibold">{t.roles.accessTitle}</CardTitle>
+          <CardDescription className="text-xs">{t.roles.accessNote}</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {ROLE_OPTIONS.map((role) => (
-            <div key={role} className="rounded-lg border border-border p-3">
-              <div className="text-sm font-medium">{ROLE_LABELS[role]}</div>
-              <p className="mt-0.5 text-xs text-muted-foreground">{ROLE_DESCRIPTIONS[role]}</p>
+        <CardContent className="space-y-2.5">
+          {ROLE_ORDER.map((role) => (
+            <div key={role} className="rounded-md border border-border p-3">
+              <div className="text-[13px] font-medium">{t.roles[role]}</div>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                {t.roles.descriptions[role]}
+              </p>
             </div>
           ))}
         </CardContent>
@@ -93,13 +111,13 @@ export function SettingsView({
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold">Категории материалов</CardTitle>
-            <CardDescription>Доступны при заведении нового материала</CardDescription>
+            <CardTitle className="text-[13px] font-semibold">{t.settings.categoriesTitle}</CardTitle>
+            <CardDescription className="text-xs">{t.settings.categoriesHint}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-1.5">
             {CATEGORIES.map((category) => (
-              <Badge key={category} variant="outline">
-                {category}
+              <Badge key={category} variant="outline" className="font-normal">
+                {translateValue(t.categories, category)}
               </Badge>
             ))}
           </CardContent>
@@ -107,15 +125,13 @@ export function SettingsView({
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold">Единицы измерения</CardTitle>
-            <CardDescription>
-              Единицу нельзя изменить после первой операции по материалу
-            </CardDescription>
+            <CardTitle className="text-[13px] font-semibold">{t.settings.unitsTitle}</CardTitle>
+            <CardDescription className="text-xs">{t.settings.unitsHint}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-1.5">
             {UNITS.map((unit) => (
-              <Badge key={unit} variant="outline">
-                {unit}
+              <Badge key={unit} variant="outline" className="font-normal">
+                {translateValue(t.units, unit)}
               </Badge>
             ))}
           </CardContent>

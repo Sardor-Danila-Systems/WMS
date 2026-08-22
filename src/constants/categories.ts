@@ -1,6 +1,9 @@
-import type { MaterialCategory, Unit } from "@/types";
-
-export const CATEGORIES: MaterialCategory[] = [
+/**
+ * Категории, единицы измерения и причины возврата хранятся в базе
+ * по-русски — это их постоянные ключи. Подписи для показа берутся
+ * из словаря (`dict.categories`, `dict.units`, `dict.returnReasons`).
+ */
+export const CATEGORIES = [
   "Цемент и смеси",
   "Металлопрокат",
   "Нерудные материалы",
@@ -11,9 +14,9 @@ export const CATEGORIES: MaterialCategory[] = [
   "Изоляция",
   "Крепёж",
   "Электрика и сантехника",
-];
+] as const;
 
-export const UNITS: Unit[] = ["т", "м³", "шт", "кг", "л", "уп", "м", "м²", "рулон"];
+export const UNITS = ["т", "м³", "шт", "кг", "л", "уп", "м", "м²", "рулон"] as const;
 
 export const RETURN_REASONS = [
   "Излишек на объекте",

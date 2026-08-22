@@ -6,6 +6,7 @@ import { Trash2 } from "lucide-react";
 
 import { removeMaterial } from "@/app/actions/catalog";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/i18n/client";
 import { ConfirmDialog } from "@/shared/components/confirm-dialog";
 import type { Material } from "@/types";
 
@@ -20,6 +21,7 @@ export function MaterialDeleteButton({
   material: Material;
   movementCount: number;
 }) {
+  const t = useT();
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
@@ -34,15 +36,15 @@ export function MaterialDeleteButton({
         onClick={() => setOpen(true)}
       >
         <Trash2 className="h-3.5 w-3.5" />
-        Удалить
+        {t.common.delete}
       </Button>
 
       <ConfirmDialog
         open={open}
         onOpenChange={setOpen}
-        title={`Удалить «${material.name}»?`}
-        description="По материалу нет ни одной операции, поэтому его можно удалить без потери истории. Действие необратимо."
-        successMessage="Материал удалён"
+        title={t.materials.deleteTitle(material.name)}
+        description={t.materials.deleteHint}
+        successMessage={t.materials.deleted}
         action={async () => {
           const result = await removeMaterial(material.id);
           if (result.ok) router.push("/materials");

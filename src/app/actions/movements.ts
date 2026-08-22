@@ -3,6 +3,8 @@
 import { refresh } from "next/cache";
 
 import { requirePermission } from "@/lib/auth/dal";
+import { getDictionary, getLocale } from "@/i18n/server";
+import { translateValidation } from "@/i18n";
 import { issueSchema, receiptSchema, returnSchema, usageSchema } from "@/lib/validation";
 import { recordMovement } from "@/server/movements";
 import { toActionError } from "@/server/errors";
@@ -52,10 +54,14 @@ export async function createReceipt(formData: FormData): Promise<ActionResult> {
     const parsed = receiptSchema.safeParse(parseForm(formData));
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
-      return { ok: false, error: issue.message, field: String(issue.path[0] ?? "") };
+      return {
+        ok: false,
+        error: translateValidation(await getDictionary(), issue.message),
+        field: String(issue.path[0] ?? ""),
+      };
     }
 
-    recordMovement({
+    await recordMovement({
       type: "RECEIPT",
       materialId: parsed.data.materialId,
       quantity: parsed.data.quantity,
@@ -69,7 +75,7 @@ export async function createReceipt(formData: FormData): Promise<ActionResult> {
     refresh();
     return { ok: true };
   } catch (error) {
-    return { ok: false, ...toActionError(error) };
+    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
   }
 }
 
@@ -81,10 +87,14 @@ export async function createIssue(formData: FormData): Promise<ActionResult> {
     const parsed = issueSchema.safeParse(parseForm(formData));
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
-      return { ok: false, error: issue.message, field: String(issue.path[0] ?? "") };
+      return {
+        ok: false,
+        error: translateValidation(await getDictionary(), issue.message),
+        field: String(issue.path[0] ?? ""),
+      };
     }
 
-    recordMovement({
+    await recordMovement({
       type: "ISSUE",
       materialId: parsed.data.materialId,
       quantity: parsed.data.quantity,
@@ -98,7 +108,7 @@ export async function createIssue(formData: FormData): Promise<ActionResult> {
     refresh();
     return { ok: true };
   } catch (error) {
-    return { ok: false, ...toActionError(error) };
+    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
   }
 }
 
@@ -110,10 +120,14 @@ export async function createUsage(formData: FormData): Promise<ActionResult> {
     const parsed = usageSchema.safeParse(parseForm(formData));
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
-      return { ok: false, error: issue.message, field: String(issue.path[0] ?? "") };
+      return {
+        ok: false,
+        error: translateValidation(await getDictionary(), issue.message),
+        field: String(issue.path[0] ?? ""),
+      };
     }
 
-    recordMovement({
+    await recordMovement({
       type: "USAGE",
       materialId: parsed.data.materialId,
       quantity: parsed.data.quantity,
@@ -127,7 +141,7 @@ export async function createUsage(formData: FormData): Promise<ActionResult> {
     refresh();
     return { ok: true };
   } catch (error) {
-    return { ok: false, ...toActionError(error) };
+    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
   }
 }
 
@@ -139,10 +153,14 @@ export async function createReturn(formData: FormData): Promise<ActionResult> {
     const parsed = returnSchema.safeParse(parseForm(formData));
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
-      return { ok: false, error: issue.message, field: String(issue.path[0] ?? "") };
+      return {
+        ok: false,
+        error: translateValidation(await getDictionary(), issue.message),
+        field: String(issue.path[0] ?? ""),
+      };
     }
 
-    recordMovement({
+    await recordMovement({
       type: "RETURN",
       materialId: parsed.data.materialId,
       quantity: parsed.data.quantity,
@@ -156,6 +174,6 @@ export async function createReturn(formData: FormData): Promise<ActionResult> {
     refresh();
     return { ok: true };
   } catch (error) {
-    return { ok: false, ...toActionError(error) };
+    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
   }
 }

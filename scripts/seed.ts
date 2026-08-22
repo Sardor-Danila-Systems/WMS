@@ -4,24 +4,29 @@
  *   npm run db:seed -- --reset — стереть всё и заполнить заново
  */
 import { seedDatabase, isDatabaseSeeded, describeDatabase } from "@/lib/db/seed";
+import { getPool } from "@/lib/db/client";
+import { SCHEMA_SQL } from "@/lib/db/schema";
 import { verifyLedgerConsistency } from "@/server/movements";
 import { USERS_SEED } from "@/lib/db/seed-people";
 
 const reset = process.argv.includes("--reset");
 
-if (!reset && isDatabaseSeeded()) {
+// Схема должна существовать до заполнения — на новой базе её ещё нет.
+await getPool().query(SCHEMA_SQL);
+
+if (!reset && (await isDatabaseSeeded())) {
   console.log("База уже заполнена. Используйте --reset, чтобы пересоздать данные.");
-  console.table(describeDatabase());
+  console.table(await describeDatabase());
   process.exit(0);
 }
 
 console.log(reset ? "Пересоздаю данные..." : "Заполняю базу...");
-const result = seedDatabase({ reset });
+const result = await seedDatabase({ reset });
 
 console.log("\nГотово:");
 console.table(result);
 
-const consistency = verifyLedgerConsistency();
+const consistency = await verifyLedgerConsistency();
 console.log(
   consistency.ok
     ? "\n✓ Остатки сходятся с журналом движений."
@@ -29,6 +34,7 @@ console.log(
 );
 if (!consistency.ok) {
   console.log(consistency.materialMismatches.slice(0, 5));
+  await getPool().end();
   process.exit(1);
 }
 
@@ -36,3 +42,5 @@ console.log("\nУчётные записи для входа:");
 for (const user of USERS_SEED) {
   console.log(`  ${user.username.padEnd(10)} / ${user.password.padEnd(10)} — ${user.fullName} (${user.role})`);
 }
+
+await getPool().end();

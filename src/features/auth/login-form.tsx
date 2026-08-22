@@ -4,11 +4,13 @@ import { useActionState } from "react";
 import { AlertCircle, LogIn } from "lucide-react";
 
 import { login, type LoginState } from "@/app/actions/auth";
+import { useT } from "@/i18n/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormField } from "@/shared/components/form-field";
 
 export function LoginForm() {
+  const t = useT();
   const [state, formAction, pending] = useActionState<LoginState | undefined, FormData>(
     login,
     undefined
@@ -16,26 +18,26 @@ export function LoginForm() {
 
   return (
     <form action={formAction} className="space-y-4">
-      <FormField label="Логин" htmlFor="username" required>
+      <FormField label={t.auth.username} htmlFor="username" required>
         <Input
           id="username"
           name="username"
           autoComplete="username"
           autoFocus
           required
-          placeholder="Например, admin"
+          placeholder={t.auth.usernamePlaceholder}
           disabled={pending}
         />
       </FormField>
 
-      <FormField label="Пароль" htmlFor="password" required>
+      <FormField label={t.auth.password} htmlFor="password" required>
         <Input
           id="password"
           name="password"
           type="password"
           autoComplete="current-password"
           required
-          placeholder="••••••••"
+          placeholder={t.auth.passwordPlaceholder}
           disabled={pending}
         />
       </FormField>
@@ -43,7 +45,7 @@ export function LoginForm() {
       {state?.error && (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+          className="flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs text-destructive"
         >
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{state.error}</span>
@@ -52,7 +54,7 @@ export function LoginForm() {
 
       <Button type="submit" className="w-full gap-2" disabled={pending}>
         <LogIn className="h-4 w-4" />
-        {pending ? "Проверяем..." : "Войти"}
+        {pending ? t.auth.signingIn : t.auth.signIn}
       </Button>
     </form>
   );

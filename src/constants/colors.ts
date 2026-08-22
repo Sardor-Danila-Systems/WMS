@@ -1,67 +1,50 @@
 import type { MovementType } from "@/types";
 
-/** Категориальная палитра по типу операции — фиксированный порядок, не переназначается фильтрами. */
-export const MOVEMENT_META: Record<
+/**
+ * Цвета по типу операции. Подписи живут в словаре — здесь только палитра,
+ * чтобы цвет операции не зависел от языка интерфейса.
+ * Порядок фиксирован и не переназначается фильтрами.
+ */
+export const MOVEMENT_COLORS: Record<
   MovementType,
-  {
-    label: string;
-    /** Короткое описание направления движения для истории. */
-    from: string;
-    to: string;
-    color: string;
-    bg: string;
-    text: string;
-    border: string;
-  }
+  { color: string; bg: string; text: string; border: string }
 > = {
   RECEIPT: {
-    label: "Поступление",
-    from: "Поставщик",
-    to: "Склад",
-    color: "#2a78d6",
-    bg: "bg-blue-50",
-    text: "text-blue-700",
-    border: "border-blue-200",
+    color: "#2563a8",
+    bg: "bg-[#eef4fb]",
+    text: "text-[#1d4e7f]",
+    border: "border-[#cfe0f2]",
   },
   ISSUE: {
-    label: "Выдача",
-    from: "Склад",
-    to: "Бригадир",
-    color: "#eb6834",
-    bg: "bg-orange-50",
-    text: "text-orange-700",
-    border: "border-orange-200",
+    color: "#c2621f",
+    bg: "bg-[#fdf2e9]",
+    text: "text-[#9c4d16]",
+    border: "border-[#f3ddc4]",
   },
   USAGE: {
-    label: "Использование",
-    from: "Бригадир",
-    to: "Объект",
-    color: "#0e8a6a",
-    bg: "bg-teal-50",
-    text: "text-teal-700",
-    border: "border-teal-200",
+    color: "#12776a",
+    bg: "bg-[#eaf6f4]",
+    text: "text-[#0e5f55]",
+    border: "border-[#c7e5e0]",
   },
   RETURN: {
-    label: "Возврат",
-    from: "Бригадир",
-    to: "Склад",
-    color: "#4a3aa7",
-    bg: "bg-violet-50",
-    text: "text-violet-700",
-    border: "border-violet-200",
+    color: "#5b4bb0",
+    bg: "bg-[#f1effa]",
+    text: "text-[#463a8c]",
+    border: "border-[#d8d2f0]",
   },
 };
 
 export const MOVEMENT_TYPES: MovementType[] = ["RECEIPT", "ISSUE", "USAGE", "RETURN"];
 
 /** Статусная палитра (фиксирована, не используется для категориальных серий). */
-export const STOCK_STATUS = {
-  good: { label: "В норме", color: "#0ca30c", bg: "bg-green-50", text: "text-green-700" },
-  warning: { label: "Заканчивается", color: "#c98500", bg: "bg-amber-50", text: "text-amber-700" },
-  critical: { label: "Критический остаток", color: "#d03b3b", bg: "bg-red-50", text: "text-red-700" },
+export const STOCK_STATUS_COLORS = {
+  good: { color: "#2f8f4e", bg: "bg-[#edf7f0]", text: "text-[#256d3c]" },
+  warning: { color: "#b57d13", bg: "bg-[#fdf5e6]", text: "text-[#8d6210]" },
+  critical: { color: "#c33c3c", bg: "bg-[#fdefef]", text: "text-[#9c2f2f]" },
 } as const;
 
-export type StockStatus = keyof typeof STOCK_STATUS;
+export type StockStatus = keyof typeof STOCK_STATUS_COLORS;
 
 export function getStockStatus(quantity: number, minStock: number): StockStatus {
   // Материал без заданной нормы не может быть «критическим» — сравнивать не с чем.

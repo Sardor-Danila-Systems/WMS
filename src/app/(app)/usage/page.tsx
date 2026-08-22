@@ -1,24 +1,28 @@
 import { PageHeader } from "@/shared/components/page-header";
 import { MovementsTable } from "@/features/operations/movements-table";
 import { OperationDialog } from "@/features/operations/operation-dialog";
+import { getDictionary } from "@/i18n/server";
 import { listMovements } from "@/server/queries";
 import { getOperationRefData } from "@/server/ref-data";
 
-export default async function UsagePage() {
-  const movements = listMovements({ type: "USAGE" });
-  const refData = getOperationRefData();
+export default async function Page() {
+  const [t, movements, refData] = await Promise.all([
+    getDictionary(),
+    listMovements({ type: "USAGE" }),
+    getOperationRefData(),
+  ]);
 
   return (
     <div>
       <PageHeader
-        title="Использование"
-        description="Списание материалов, израсходованных бригадами на объектах"
+        title={t.operations.usage.title}
+        description={t.operations.usage.subtitle}
         actions={<OperationDialog type="USAGE" data={refData} />}
       />
       <MovementsTable
         movements={movements}
         columns={["date", "material", "quantity", "foreman", "project", "user", "comment"]}
-        emptyMessage="Списаний на объекты пока не было"
+        emptyMessage={t.operations.usage.empty}
         exportName="ispolzovanie"
       />
     </div>

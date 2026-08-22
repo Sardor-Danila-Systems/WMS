@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { Pencil, Plus } from "lucide-react";
 
 import { saveUser } from "@/app/actions/catalog";
-import { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLE_OPTIONS } from "@/constants/roles";
+import { useT } from "@/i18n/client";
 import { FormField } from "@/shared/components/form-field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -39,8 +39,10 @@ interface Values {
  * работников нет намеренно, иначе «кто принял материал» пришлось бы вводить руками.
  */
 export function UserFormDialog({ user }: { user?: User }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const isEdit = Boolean(user);
+  const roleOptions: Role[] = ["ADMIN", "WAREHOUSE_WORKER"];
 
   const {
     register,
@@ -64,7 +66,7 @@ export function UserFormDialog({ user }: { user?: User }) {
   const { submit, isPending } = useActionSubmit<Values>({
     action: saveUser,
     setError,
-    successTitle: isEdit ? "Данные сотрудника обновлены" : "Сотрудник добавлен",
+    successTitle: isEdit ? t.users.saved : t.users.created,
     onSuccess: () => {
       setOpen(false);
       if (!isEdit) reset();
@@ -77,14 +79,14 @@ export function UserFormDialog({ user }: { user?: User }) {
         render={<Button size="sm" variant={isEdit ? "outline" : "default"} className="gap-1.5" />}
       >
         {isEdit ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-        {isEdit ? "Редактировать" : "Добавить сотрудника"}
+        {isEdit ? t.common.edit : t.users.add}
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Редактирование сотрудника" : "Новый сотрудник"}</DialogTitle>
+          <DialogTitle>{isEdit ? t.users.edit : t.users.create}</DialogTitle>
           <DialogDescription>
-            Сотрудник входит в систему под своим логином — по нему видно, кто провёл операцию.
+            {t.users.hint}
           </DialogDescription>
         </DialogHeader>
 
@@ -93,9 +95,9 @@ export function UserFormDialog({ user }: { user?: User }) {
           className="space-y-4"
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="ФИО" required error={errors.fullName?.message}>
+            <FormField label={t.users.fullName} required error={errors.fullName?.message}>
               <Input
-                placeholder="Иван Иванов"
+                placeholder={t.users.namePlaceholder}
                 autoFocus
                 disabled={isPending}
                 aria-invalid={Boolean(errors.fullName)}
@@ -103,24 +105,24 @@ export function UserFormDialog({ user }: { user?: User }) {
               />
             </FormField>
 
-            <FormField label="Логин" required={!isEdit} error={errors.username?.message}>
+            <FormField label={t.users.login} required={!isEdit} error={errors.username?.message}>
               <Input
-                placeholder="ivanov"
+                placeholder={t.users.loginPlaceholder}
                 autoComplete="off"
                 disabled={isPending || isEdit}
                 aria-invalid={Boolean(errors.username)}
                 {...register("username")}
               />
-              {isEdit && <p className="text-xs text-muted-foreground">Логин изменить нельзя</p>}
+              {isEdit && <p className="text-xs text-muted-foreground">{t.users.loginLocked}</p>}
             </FormField>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Должность" error={errors.position?.message}>
-              <Input placeholder="Кладовщик" disabled={isPending} {...register("position")} />
+            <FormField label={t.users.position} error={errors.position?.message}>
+              <Input placeholder={t.users.positionPlaceholder} disabled={isPending} {...register("position")} />
             </FormField>
 
-            <FormField label="Телефон" error={errors.phone?.message}>
+            <FormField label={t.users.phone} error={errors.phone?.message}>
               <Input placeholder="+7 (900) 000-00-00" disabled={isPending} {...register("phone")} />
             </FormField>
           </div>
@@ -128,31 +130,31 @@ export function UserFormDialog({ user }: { user?: User }) {
           <SelectField
             control={control}
             name="role"
-            label="Роль"
-            placeholder="Выберите роль"
+            label={t.roles.title}
+            placeholder={t.users.rolePlaceholder}
             required
             error={errors.role?.message}
             disabled={isPending}
-            options={ROLE_OPTIONS.map((role) => ({
+            options={roleOptions.map((role) => ({
               value: role,
-              label: ROLE_LABELS[role],
-              hint: role === "ADMIN" ? "полный доступ" : "операции",
+              label: t.roles[role],
+              hint: role === "ADMIN" ? t.users.roleFullAccess : t.users.roleOperations,
             }))}
           >
             <p className="text-xs text-muted-foreground">
-              {ROLE_DESCRIPTIONS.WAREHOUSE_WORKER}
+              {t.roles.descriptions.WAREHOUSE_WORKER}
             </p>
           </SelectField>
 
           <FormField
-            label={isEdit ? "Новый пароль" : "Пароль"}
+            label={isEdit ? t.users.newPassword : t.auth.password}
             required={!isEdit}
             error={errors.password?.message}
           >
             <Input
               type="password"
               autoComplete="new-password"
-              placeholder={isEdit ? "Оставьте пустым, чтобы не менять" : "Минимум 6 символов"}
+              placeholder={isEdit ? t.users.passwordKeep : t.users.passwordMin}
               disabled={isPending}
               aria-invalid={Boolean(errors.password)}
               {...register("password")}
@@ -160,7 +162,7 @@ export function UserFormDialog({ user }: { user?: User }) {
           </FormField>
 
           {isEdit && (
-            <FormField label="Доступ">
+            <FormField label={t.users.accessLabel}>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -168,14 +170,14 @@ export function UserFormDialog({ user }: { user?: User }) {
                   disabled={isPending}
                   {...register("isActive")}
                 />
-                Сотрудник активен и может входить в систему
+                {t.users.activeLabel}
               </label>
             </FormField>
           )}
 
           <DialogFooter>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Сохраняем..." : isEdit ? "Сохранить" : "Добавить"}
+              {isPending ? t.common.saving : isEdit ? t.common.save : t.common.add}
             </Button>
           </DialogFooter>
         </form>

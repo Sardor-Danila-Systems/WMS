@@ -1,6 +1,7 @@
 import { PageHeader } from "@/shared/components/page-header";
 import { ReportsView } from "@/features/reports/reports-view";
 import { getForemanReport, getProjectReport, getStockReport } from "@/server/queries";
+import { getDictionary } from "@/i18n/server";
 
 /** Период отчёта в дату начала выборки. */
 function periodToFrom(period: string): string | undefined {
@@ -21,18 +22,17 @@ export default async function ReportsPage({
   const period = typeof params.period === "string" ? params.period : "all";
   const from = periodToFrom(period);
 
+  const [t, stock, foremen, projects] = await Promise.all([
+    getDictionary(),
+    getStockReport(from),
+    getForemanReport(from),
+    getProjectReport(from),
+  ]);
+
   return (
     <div>
-      <PageHeader
-        title="Отчёты"
-        description="Остатки, обороты и расход материалов с выгрузкой в Excel и CSV"
-      />
-      <ReportsView
-        stock={getStockReport(from)}
-        foremen={getForemanReport(from)}
-        projects={getProjectReport(from)}
-        period={period}
-      />
+      <PageHeader title={t.reports.title} description={t.reports.subtitle} />
+      <ReportsView stock={stock} foremen={foremen} projects={projects} period={period} />
     </div>
   );
 }

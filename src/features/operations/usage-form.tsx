@@ -8,6 +8,8 @@ import type { z } from "zod";
 import { createUsage } from "@/app/actions/movements";
 import { usageSchema } from "@/lib/validation";
 import { formatQuantity } from "@/lib/format";
+import { useI18n } from "@/i18n/client";
+import { translateValue } from "@/i18n";
 import { FormField } from "@/shared/components/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +27,8 @@ type Values = z.input<typeof usageSchema>;
  * списать «из воздуха» через интерфейс невозможно.
  */
 export function UsageForm({ data, onSuccess }: { data: OperationRefData; onSuccess: () => void }) {
+  const { t, locale } = useI18n();
+  const unitOf = (unit: string) => translateValue(t.units, unit);
   const {
     register,
     handleSubmit,
@@ -64,10 +68,12 @@ export function UsageForm({ data, onSuccess }: { data: OperationRefData; onSucce
   const { submit, isPending } = useActionSubmit<Values>({
     action: createUsage,
     setError,
-    successTitle: "Использование зафиксировано",
+    successTitle: t.operations.usage.success,
     successDescription: (values) =>
       position
-        ? `Списано ${formatQuantity(Number(values.quantity), position.unit)} с остатка бригадира`
+        ? t.operations.usage.successHint(
+            formatQuantity(Number(values.quantity), unitOf(position.unit), locale)
+          )
         : undefined,
     onSuccess,
   });
@@ -77,8 +83,8 @@ export function UsageForm({ data, onSuccess }: { data: OperationRefData; onSucce
       <SelectField
         control={control}
         name="foremanId"
-        label="Бригадир"
-        placeholder="Кто израсходовал материал"
+        label={t.operations.foreman}
+        placeholder={t.operations.usage.foremanPlaceholder}
         required
         error={errors.foremanId?.message}
         disabled={isPending}
@@ -88,31 +94,31 @@ export function UsageForm({ data, onSuccess }: { data: OperationRefData; onSucce
       <SelectField
         control={control}
         name="materialId"
-        label="Материал"
-        placeholder={foremanId ? "Что израсходовано" : "Сначала выберите бригадира"}
+        label={t.operations.material}
+        placeholder={foremanId ? t.operations.usage.materialPlaceholder : t.operations.selectForemanFirst}
         required
         error={errors.materialId?.message}
         disabled={isPending || !foremanId}
-        emptyMessage="У бригадира нет материалов на руках"
+        emptyMessage={t.operations.noStockForeman}
         options={held.map((row) => ({
           value: row.materialId,
           label: row.materialName,
-          hint: formatQuantity(row.quantity, row.unit),
+          hint: formatQuantity(row.quantity, unitOf(row.unit), locale),
         }))}
       >
         {position && (
-          <AvailableHint available={position.quantity} unit={position.unit} label="На руках у бригадира" />
+          <AvailableHint available={position.quantity} unit={position.unit} label={t.operations.atForemanHand} />
         )}
       </SelectField>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField
-          label="Использовано"
+          label={t.operations.usage.quantity}
           required
-          error={errors.quantity?.message ?? (exceedsHeld ? "Больше, чем на руках у бригадира" : undefined)}
+          error={errors.quantity?.message ?? (exceedsHeld ? t.operations.exceedsForeman : undefined)}
         >
           <QuantityInput
-            unit={position?.unit}
+            unit={position ? unitOf(position.unit) : undefined}
             max={position?.quantity}
             invalid={Boolean(errors.quantity) || exceedsHeld}
             disabled={isPending}
@@ -120,7 +126,7 @@ export function UsageForm({ data, onSuccess }: { data: OperationRefData; onSucce
           />
         </FormField>
 
-        <FormField label="Дата" required error={errors.occurredAt?.message}>
+        <FormField label={t.operations.date} required error={errors.occurredAt?.message}>
           <Input type="date" max={todayISODate()} disabled={isPending} {...register("occurredAt")} />
         </FormField>
       </div>
@@ -128,16 +134,16 @@ export function UsageForm({ data, onSuccess }: { data: OperationRefData; onSucce
       <SelectField
         control={control}
         name="projectId"
-        label="Объект"
-        placeholder="Где израсходован материал"
+        label={t.operations.project}
+        placeholder={t.operations.usage.projectPlaceholder}
         error={errors.projectId?.message}
         disabled={isPending}
         options={data.projects.map((p) => ({ value: p.id, label: p.name }))}
       />
 
-      <FormField label="Комментарий" error={errors.comment?.message}>
+      <FormField label={t.operations.comment} error={errors.comment?.message}>
         <Textarea
-          placeholder="Какие работы выполнены"
+          placeholder={t.operations.usage.commentPlaceholder}
           rows={2}
           disabled={isPending}
           {...register("comment")}
@@ -146,7 +152,7 @@ export function UsageForm({ data, onSuccess }: { data: OperationRefData; onSucce
 
       <DialogFooter>
         <Button type="submit" disabled={isPending || exceedsHeld}>
-          {isPending ? "Сохраняем..." : "Списать на объект"}
+          {isPending ? t.common.saving : t.operations.usage.submit}
         </Button>
       </DialogFooter>
     </form>

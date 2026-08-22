@@ -2,56 +2,42 @@ import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-export type StatCardColor =
-  | "indigo"
-  | "blue"
-  | "orange"
-  | "violet"
-  | "teal"
-  | "amber"
-  | "red"
-  | "slate";
+export type StatCardTone = "neutral" | "accent" | "warning" | "danger" | "positive";
 
 interface StatCardProps {
   label: string;
   value: string;
   icon: LucideIcon;
   hint?: string;
-  color?: StatCardColor;
+  tone?: StatCardTone;
 }
 
-const COLOR_STYLES: Record<StatCardColor, string> = {
-  indigo: "bg-indigo-50 text-indigo-700",
-  blue: "bg-blue-50 text-blue-700",
-  orange: "bg-orange-50 text-orange-700",
-  violet: "bg-violet-50 text-violet-700",
-  teal: "bg-teal-50 text-teal-700",
-  amber: "bg-amber-50 text-amber-700",
-  red: "bg-red-50 text-red-700",
-  slate: "bg-muted text-muted-foreground",
+const TONE: Record<StatCardTone, { icon: string; value: string }> = {
+  neutral: { icon: "text-muted-foreground", value: "text-foreground" },
+  accent: { icon: "text-primary", value: "text-foreground" },
+  warning: { icon: "text-[#b57d13]", value: "text-[#8d6210]" },
+  danger: { icon: "text-[#c33c3c]", value: "text-[#9c2f2f]" },
+  positive: { icon: "text-[#2f8f4e]", value: "text-foreground" },
 };
 
 /**
- * Плитка показателя. Серверный компонент: у неё нет состояния,
- * поэтому иконку можно передавать напрямую со страницы,
- * а в браузер не уезжает лишний JavaScript.
+ * Плитка показателя. Серверный компонент без состояния — иконку можно
+ * передавать прямо со страницы, а в браузер не уезжает лишний JavaScript.
  */
-export function StatCard({ label, value, icon: Icon, hint, color = "slate" }: StatCardProps) {
+export function StatCard({ label, value, icon: Icon, hint, tone = "neutral" }: StatCardProps) {
+  const styles = TONE[tone];
   return (
-    <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 hover:bg-muted/20">
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        <div
-          className={cn(
-            "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
-            COLOR_STYLES[color]
-          )}
-        >
-          <Icon className="h-4 w-4" />
-        </div>
+    <div className="rounded-lg border border-border bg-card px-4 py-3.5">
+      <div className="flex items-center gap-2">
+        <Icon className={cn("h-4 w-4 shrink-0", styles.icon)} />
+        <span className="truncate text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+          {label}
+        </span>
       </div>
-      <div className="mt-3 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
-      {hint && <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">{hint}</div>}
+      <div className={cn("mt-2 text-[26px] font-semibold leading-none tracking-tight tabular-nums", styles.value)}>
+        {value}
+      </div>
+      {hint && <div className="mt-1.5 line-clamp-1 text-xs text-muted-foreground">{hint}</div>}
     </div>
   );
 }

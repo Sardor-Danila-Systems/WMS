@@ -1,4 +1,5 @@
 import { PageHeader } from "@/shared/components/page-header";
+import { getDictionary } from "@/i18n/server";
 import { HistoryFilters } from "@/features/history/history-filters";
 import { MovementsTable } from "@/features/operations/movements-table";
 import { listForemen, listMaterials, listMovements, listProjects, listUsers } from "@/server/queries";
@@ -39,20 +40,17 @@ export default async function HistoryPage({
     from: periodToFrom(value("period")),
   };
 
-  const movements = listMovements(filters);
+  const [t, movements] = await Promise.all([getDictionary(), listMovements(filters)]);
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        title="История операций"
-        description="Полный журнал движения материалов: откуда пришло, кому выдано, сколько израсходовано и что вернулось"
-      />
+      <PageHeader title={t.history.title} description={t.history.subtitle} />
 
       <HistoryFilters
-        materials={listMaterials({ includeArchived: true })}
-        foremen={listForemen({ includeInactive: true })}
-        users={listUsers({ includeInactive: true })}
-        projects={listProjects({ includeInactive: true })}
+        materials={await listMaterials({ includeArchived: true })}
+        foremen={await listForemen({ includeInactive: true })}
+        users={await listUsers({ includeInactive: true })}
+        projects={await listProjects({ includeInactive: true })}
         current={{
           type: value("type"),
           materialId: value("materialId"),
@@ -64,7 +62,8 @@ export default async function HistoryPage({
       />
 
       <div className="text-xs text-muted-foreground">
-        Найдено операций: <span className="font-medium tabular-nums text-foreground">{movements.length}</span>
+        {t.history.found}:{" "}
+        <span className="font-medium tabular-nums text-foreground">{movements.length}</span>
       </div>
 
       <MovementsTable
@@ -83,7 +82,7 @@ export default async function HistoryPage({
           "comment",
         ]}
         pageSize={15}
-        emptyMessage="По выбранным условиям операций не найдено"
+        emptyMessage={t.history.empty}
         exportName="istoriya-operatsiy"
       />
     </div>

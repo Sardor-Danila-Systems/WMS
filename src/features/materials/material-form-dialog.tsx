@@ -9,6 +9,8 @@ import type { z } from "zod";
 import { saveMaterial } from "@/app/actions/catalog";
 import { materialSchema } from "@/lib/validation";
 import { CATEGORIES, UNITS } from "@/constants/categories";
+import { useT } from "@/i18n/client";
+import { translateValue } from "@/i18n";
 import { FormField } from "@/shared/components/form-field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -34,6 +36,7 @@ export function MaterialFormDialog({
   material?: Material;
   hasHistory?: boolean;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const isEdit = Boolean(material);
 
@@ -58,7 +61,7 @@ export function MaterialFormDialog({
   const { submit, isPending } = useActionSubmit<Values>({
     action: saveMaterial,
     setError,
-    successTitle: isEdit ? "Материал обновлён" : "Материал добавлен",
+    successTitle: isEdit ? t.materials.saved : t.materials.created,
     onSuccess: () => {
       setOpen(false);
       if (!isEdit) reset();
@@ -79,21 +82,19 @@ export function MaterialFormDialog({
             size="sm"
             variant={isEdit ? "outline" : "default"}
             className="gap-1.5"
-            aria-label={isEdit ? "Редактировать материал" : undefined}
+            aria-label={isEdit ? t.common.edit : undefined}
           />
         }
       >
         {isEdit ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-        {isEdit ? "Редактировать" : "Добавить материал"}
+        {isEdit ? t.common.edit : t.materials.add}
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Редактирование материала" : "Новый материал"}</DialogTitle>
+          <DialogTitle>{isEdit ? t.materials.edit : t.materials.create}</DialogTitle>
           <DialogDescription>
-            {isEdit
-              ? "Изменения не затрагивают уже проведённые операции."
-              : "Начальный остаток будет записан как поступление на склад."}
+{isEdit ? t.materials.editHint : t.materials.createHint}
           </DialogDescription>
         </DialogHeader>
 
@@ -101,9 +102,9 @@ export function MaterialFormDialog({
           onSubmit={handleSubmit((values) => submit({ ...values, id: material?.id }))}
           className="space-y-4"
         >
-          <FormField label="Название" required error={errors.name?.message}>
+          <FormField label={t.materials.name} required error={errors.name?.message}>
             <Input
-              placeholder="Например, Цемент М500"
+              placeholder={t.materials.namePlaceholder}
               autoFocus
               disabled={isPending}
               aria-invalid={Boolean(errors.name)}
@@ -115,34 +116,34 @@ export function MaterialFormDialog({
             <SelectField
               control={control}
               name="category"
-              label="Категория"
-              placeholder="Выберите категорию"
+              label={t.materials.category}
+              placeholder={t.materials.categoryPlaceholder}
               required
               error={errors.category?.message}
               disabled={isPending}
-              options={CATEGORIES.map((c) => ({ value: c, label: c }))}
+              options={CATEGORIES.map((c) => ({ value: c, label: translateValue(t.categories, c) }))}
             />
 
             <SelectField
               control={control}
               name="unit"
-              label="Единица измерения"
-              placeholder="Выберите единицу"
+              label={t.materials.unit}
+              placeholder={t.materials.unitPlaceholder}
               required
               error={errors.unit?.message}
               disabled={isPending || hasHistory}
-              options={UNITS.map((u) => ({ value: u, label: u }))}
+              options={UNITS.map((u) => ({ value: u, label: translateValue(t.units, u) }))}
             >
               {hasHistory && (
                 <p className="text-xs text-muted-foreground">
-                  По материалу есть движения — единицу изменить нельзя
+{t.materials.unitLocked}
                 </p>
               )}
             </SelectField>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Минимальный остаток" required error={errors.minStock?.message}>
+            <FormField label={t.materials.minStock} required error={errors.minStock?.message}>
               <Input
                 type="number"
                 step="any"
@@ -155,7 +156,7 @@ export function MaterialFormDialog({
             </FormField>
 
             {!isEdit && (
-              <FormField label="Начальный остаток" error={errors.initialQuantity?.message}>
+              <FormField label={t.materials.initialQuantity} error={errors.initialQuantity?.message}>
                 <Input
                   type="number"
                   step="any"
@@ -170,7 +171,7 @@ export function MaterialFormDialog({
 
           <DialogFooter>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Сохраняем..." : isEdit ? "Сохранить" : "Добавить материал"}
+              {isPending ? t.common.saving : isEdit ? t.common.save : t.materials.add}
             </Button>
           </DialogFooter>
         </form>

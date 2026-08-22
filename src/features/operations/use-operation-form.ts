@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { FieldValues, Path, UseFormSetError } from "react-hook-form";
 import { toast } from "sonner";
+import { useT } from "@/i18n/client";
 
 import type { ActionResult } from "@/app/actions/types";
 
@@ -26,6 +27,7 @@ export function useActionSubmit<TValues extends FieldValues>(options: {
   successDescription?: (values: TValues) => string | undefined;
   onSuccess?: () => void;
 }) {
+  const t = useT();
   const [isPending, setIsPending] = useState(false);
 
   async function submit(values: TValues) {
@@ -53,7 +55,7 @@ export function useActionSubmit<TValues extends FieldValues>(options: {
       options.onSuccess?.();
       return true;
     } catch {
-      toast.error("Сервер недоступен. Проверьте соединение и попробуйте ещё раз.");
+      toast.error(t.common.serverUnavailable);
       return false;
     } finally {
       setIsPending(false);

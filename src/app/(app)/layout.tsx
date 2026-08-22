@@ -10,7 +10,7 @@ import { getSetting } from "@/server/catalog";
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await requireUser();
-  const companyName = getSetting("company_name", "СтройСклад");
+  const companyName = await getSetting("company_name", "Gagarin Avenue");
 
   return (
     <AppShell user={user} companyName={companyName}>

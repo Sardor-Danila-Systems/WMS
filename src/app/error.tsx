@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { AlertTriangle, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useT } from "@/i18n/client";
 
 /**
  * Понятный экран вместо системной страницы ошибки.
@@ -17,6 +18,8 @@ export default function ErrorBoundary({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const t = useT();
+
   useEffect(() => {
     console.error("[wms] Ошибка страницы:", error);
   }, [error]);
@@ -24,17 +27,16 @@ export default function ErrorBoundary({
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4">
       <div className="w-full max-w-md text-center">
-        <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
-          <AlertTriangle className="h-5.5 w-5.5" />
+        <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+          <AlertTriangle className="h-5 w-5" />
         </div>
-        <h2 className="text-lg font-semibold tracking-tight">Не удалось открыть раздел</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Данные склада в безопасности — ни одна операция не была изменена.
-          Попробуйте открыть раздел ещё раз.
+        <h2 className="text-base font-semibold tracking-tight">{t.errorPages.errorTitle}</h2>
+        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+          {t.errorPages.errorHint}
         </p>
         <Button onClick={reset} className="mt-5 gap-2">
           <RotateCcw className="h-4 w-4" />
-          Повторить
+          {t.errorPages.retry}
         </Button>
       </div>
     </div>

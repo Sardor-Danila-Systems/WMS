@@ -7,11 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:seed": "node --no-warnings --import ./scripts/register-alias.mjs scripts/seed.ts",
-    "db:check": "node --no-warnings --import ./scripts/register-alias.mjs scripts/check.ts",
-    "test:e2e": "node --no-warnings --import ./scripts/register-alias.mjs scripts/test-flow.ts",
+    "db:seed": "node --no-warnings --env-file-if-exists=.env.local --import ./scripts/register-alias.mjs scripts/seed.ts",
+    "db:check": "node --no-warnings --env-file-if-exists=.env.local --import ./scripts/register-alias.mjs scripts/check.ts",
+    "test:e2e": "node --no-warnings --env-file-if-exists=.env.local --import ./scripts/register-alias.mjs scripts/test-flow.ts",
     "typecheck": "tsc --noEmit",
-    "test:concurrency": "node --no-warnings --import ./scripts/register-alias.mjs scripts/test-concurrency.ts"
+    "test:concurrency": "node --no-warnings --env-file-if-exists=.env.local --import ./scripts/register-alias.mjs scripts/test-concurrency.ts",
+    "db:migrate": "node --no-warnings --env-file-if-exists=.env.local --import ./scripts/register-alias.mjs scripts/migrate.ts",
+    "db:create-admin": "node --no-warnings --env-file-if-exists=.env.local --import ./scripts/register-alias.mjs scripts/create-admin.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -22,6 +24,7 @@
     "lucide-react": "^1.23.0",
     "next": "16.2.10",
     "next-themes": "^0.4.6",
+    "pg": "^8.23.0",
     "react": "19.2.4",
     "react-day-picker": "^10.0.1",
     "react-dom": "19.2.4",
@@ -37,6 +40,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24.13.3",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

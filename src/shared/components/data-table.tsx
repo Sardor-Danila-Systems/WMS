@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { useI18n } from "@/i18n/client";
+import { useIntlTag, useT } from "@/i18n/client";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "./empty-state";
 
@@ -56,7 +56,8 @@ export function DataTable<T>({
   onRowClick,
   mobileCard,
 }: DataTableProps<T>) {
-  const { t, locale } = useI18n();
+  const t = useT();
+  const locale = useIntlTag();
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   const [page, setPage] = useState(0);
@@ -82,7 +83,7 @@ export function DataTable<T>({
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);
   const pageRows = sorted.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
-  const empty = emptyMessage ?? t.common.noData;
+  const empty = emptyMessage ?? t("common.noData");
 
   function handleSort(column: DataTableColumn<T>) {
     if (!column.sortValue) return;
@@ -100,9 +101,9 @@ export function DataTable<T>({
 
   const pagination = !isLoading && sorted.length > 0 && (
     <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2.5">
-      <span className="text-[11px] text-muted-foreground">
-        {t.common.shown} {currentPage * pageSize + 1}–
-        {Math.min(sorted.length, (currentPage + 1) * pageSize)} {t.common.of} {sorted.length}
+      <span className="text-[12.5px] text-muted-foreground">
+        {t("common.shown")} {currentPage * pageSize + 1}–
+        {Math.min(sorted.length, (currentPage + 1) * pageSize)} {t("common.of")} {sorted.length}
       </span>
       {pageCount > 1 && (
         <div className="flex items-center gap-1">
@@ -116,7 +117,7 @@ export function DataTable<T>({
           >
             <ChevronLeft className="h-3.5 w-3.5" />
           </Button>
-          <span className="px-1.5 text-[11px] tabular-nums text-muted-foreground">
+          <span className="px-1.5 text-[12.5px] tabular-nums text-muted-foreground">
             {currentPage + 1} / {pageCount}
           </span>
           <Button
@@ -174,9 +175,9 @@ export function DataTable<T>({
                   )}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-medium leading-snug">{card.title}</div>
+                    <div className="text-[14.5px] font-medium leading-snug">{card.title}</div>
                     {card.subtitle && (
-                      <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      <div className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
                         {card.subtitle}
                       </div>
                     )}
@@ -202,7 +203,7 @@ export function DataTable<T>({
                       active ? (sortDirection === "asc" ? "ascending" : "descending") : undefined
                     }
                     className={cn(
-                      "h-9 whitespace-nowrap bg-muted/40 text-[11px] font-medium uppercase tracking-[0.03em] text-muted-foreground",
+                      "h-9 whitespace-nowrap bg-muted/40 text-[12.5px] font-medium uppercase tracking-[0.03em] text-muted-foreground",
                       column.headerClassName
                     )}
                   >
@@ -275,7 +276,7 @@ export function DataTable<T>({
                       : undefined
                   }
                   className={cn(
-                    "text-[13px]",
+                    "text-[14.5px]",
                     onRowClick &&
                       "group/row cursor-pointer outline-none focus-visible:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/30"
                   )}

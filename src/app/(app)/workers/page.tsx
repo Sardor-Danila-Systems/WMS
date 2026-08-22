@@ -5,7 +5,7 @@ import { UsersTable } from "@/features/users/users-table";
 import { UserFormDialog } from "@/features/users/user-form-dialog";
 import { requireUser, roleCan } from "@/lib/auth/dal";
 import { getUserOperationCounts, listUsers } from "@/server/queries";
-import { getDictionary } from "@/i18n/server";
+import { getT } from "@/i18n/server";
 
 export default async function WorkersPage() {
   const user = await requireUser();
@@ -13,7 +13,7 @@ export default async function WorkersPage() {
   if (!roleCan(user.role, "user:write")) redirect("/");
 
   const [t, counts, list] = await Promise.all([
-    getDictionary(),
+    getT(),
     getUserOperationCounts(),
     listUsers({ includeInactive: true }),
   ]);
@@ -26,8 +26,8 @@ export default async function WorkersPage() {
   return (
     <div>
       <PageHeader
-        title={t.users.title}
-        description={t.users.subtitle}
+        title={t("users.title")}
+        description={t("users.subtitle")}
         actions={<UserFormDialog />}
       />
       <UsersTable users={users} />

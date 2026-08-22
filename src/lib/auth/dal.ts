@@ -4,32 +4,10 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 
 import { getSessionUser, type SessionUser } from "./session";
-import type { Role } from "@/types";
 import { BusinessError } from "@/server/errors";
+import { roleCan, type Permission } from "./permissions";
 
-/**
- * Права ролей. ADMIN — всё; WAREHOUSE_WORKER — ежедневные складские операции
- * и просмотр, но не управление справочниками, сотрудниками и настройками.
- */
-export const PERMISSIONS = {
-  // Операции движения материалов
-  "movement:create": ["ADMIN", "WAREHOUSE_WORKER"],
-  // Справочники
-  "material:write": ["ADMIN", "WAREHOUSE_WORKER"],
-  "material:delete": ["ADMIN"],
-  "foreman:write": ["ADMIN", "WAREHOUSE_WORKER"],
-  "project:write": ["ADMIN"],
-  "supplier:write": ["ADMIN"],
-  // Администрирование
-  "user:write": ["ADMIN"],
-  "settings:write": ["ADMIN"],
-} as const satisfies Record<string, readonly Role[]>;
-
-export type Permission = keyof typeof PERMISSIONS;
-
-export function roleCan(role: Role, permission: Permission): boolean {
-  return (PERMISSIONS[permission] as readonly Role[]).includes(role);
-}
+export { roleCan, PERMISSIONS, type Permission } from "./permissions";
 
 /**
  * Читает пользователя один раз за проход рендера.

@@ -1,5 +1,5 @@
 import { PageHeader } from "@/shared/components/page-header";
-import { getDictionary } from "@/i18n/server";
+import { getT } from "@/i18n/server";
 import { HistoryFilters } from "@/features/history/history-filters";
 import { MovementsTable } from "@/features/operations/movements-table";
 import { listForemen, listMaterials, listMovements, listProjects, listUsers } from "@/server/queries";
@@ -40,11 +40,11 @@ export default async function HistoryPage({
     from: periodToFrom(value("period")),
   };
 
-  const [t, movements] = await Promise.all([getDictionary(), listMovements(filters)]);
+  const [t, movements] = await Promise.all([getT(), listMovements(filters)]);
 
   return (
     <div className="space-y-5">
-      <PageHeader title={t.history.title} description={t.history.subtitle} />
+      <PageHeader title={t("history.title")} description={t("history.subtitle")} />
 
       <HistoryFilters
         materials={await listMaterials({ includeArchived: true })}
@@ -61,8 +61,8 @@ export default async function HistoryPage({
         }}
       />
 
-      <div className="text-xs text-muted-foreground">
-        {t.history.found}:{" "}
+      <div className="text-[13px] text-muted-foreground">
+        {t("history.found")}:{" "}
         <span className="font-medium tabular-nums text-foreground">{movements.length}</span>
       </div>
 
@@ -82,7 +82,7 @@ export default async function HistoryPage({
           "comment",
         ]}
         pageSize={15}
-        emptyMessage={t.history.empty}
+        emptyMessage={t("history.empty")}
         exportName="istoriya-operatsiy"
       />
     </div>

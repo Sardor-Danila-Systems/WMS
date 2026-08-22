@@ -1,6 +1,6 @@
 import "@/lib/server-only";
 
-import { queryAll } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
 import type { ForemanStockRow } from "@/types";
 import type { OperationRefData } from "@/features/operations/types";
 import { listForemen, listMaterials, listProjects, listSuppliers } from "./queries";
@@ -12,18 +12,22 @@ import { listForemen, listMaterials, listProjects, listSuppliers } from "./queri
  * без дополнительного запроса на сервер.
  */
 export async function getOperationRefData(): Promise<OperationRefData> {
-  const stockRows = await queryAll<ForemanStockRow>(
-    `SELECT fs.foreman_id AS "foremanId", fs.material_id AS "materialId",
-            m.name AS "materialName", m.unit, fs.quantity, fs.updated_at AS "updatedAt"
-       FROM foreman_stock fs
-       JOIN materials m ON m.id = fs.material_id
-      WHERE fs.quantity > 0
-      ORDER BY m.name`
-  );
+  const stockRows = await db.foremanStock.findMany({
+    where: { quantity: { gt: 0 } },
+    include: { material: { select: { name: true, unit: true } } },
+    orderBy: { material: { name: "asc" } },
+  });
 
   const foremanStock: Record<string, ForemanStockRow[]> = {};
   for (const row of stockRows) {
-    (foremanStock[row.foremanId] ??= []).push(row);
+    (foremanStock[row.foremanId] ??= []).push({
+      foremanId: row.foremanId,
+      materialId: row.materialId,
+      materialName: row.material.name,
+      unit: row.material.unit,
+      quantity: row.quantity,
+      updatedAt: row.updatedAt.toISOString(),
+    });
   }
 
   // Справочники не зависят друг от друга — загружаем их параллельно,

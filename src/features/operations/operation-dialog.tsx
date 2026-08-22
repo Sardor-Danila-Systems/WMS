@@ -13,7 +13,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useT } from "@/i18n/client";
-import type { Dictionary } from "@/i18n/types";
 import type { MovementType } from "@/types";
 import { ReceiptForm } from "./receipt-form";
 import { IssueForm } from "./issue-form";
@@ -21,32 +20,13 @@ import { UsageForm } from "./usage-form";
 import { ReturnForm } from "./return-form";
 import type { OperationRefData } from "./types";
 
-/** Подписи диалога по типу операции берутся из словаря. */
-function dialogMeta(t: Dictionary, type: MovementType) {
-  const map: Record<MovementType, { trigger: string; title: string; description: string }> = {
-    RECEIPT: {
-      trigger: t.operations.receipt.button,
-      title: t.operations.receipt.dialogTitle,
-      description: t.operations.receipt.dialogHint,
-    },
-    ISSUE: {
-      trigger: t.operations.issue.button,
-      title: t.operations.issue.dialogTitle,
-      description: t.operations.issue.dialogHint,
-    },
-    USAGE: {
-      trigger: t.operations.usage.button,
-      title: t.operations.usage.dialogTitle,
-      description: t.operations.usage.dialogHint,
-    },
-    RETURN: {
-      trigger: t.operations.return.button,
-      title: t.operations.return.dialogTitle,
-      description: t.operations.return.dialogHint,
-    },
-  };
-  return map[type];
-}
+/** Подписи диалога по типу операции. */
+const DIALOG_KEYS: Record<MovementType, "receipt" | "issue" | "usage" | "return"> = {
+  RECEIPT: "receipt",
+  ISSUE: "issue",
+  USAGE: "usage",
+  RETURN: "return",
+};
 
 export function OperationDialog({
   type,
@@ -59,7 +39,12 @@ export function OperationDialog({
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const meta = dialogMeta(t, type);
+  const key = DIALOG_KEYS[type];
+  const meta = {
+    trigger: t(`operations.${key}.button`),
+    title: t(`operations.${key}.dialogTitle`),
+    description: t(`operations.${key}.dialogHint`),
+  };
   const close = () => setOpen(false);
 
   return (

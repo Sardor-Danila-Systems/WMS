@@ -3,11 +3,11 @@ import { ProjectsTable } from "@/features/projects/projects-table";
 import { ProjectFormDialog } from "@/features/projects/project-form-dialog";
 import { getCurrentUser, roleCan } from "@/lib/auth/dal";
 import { getProjectSummaries, listProjects } from "@/server/queries";
-import { getDictionary } from "@/i18n/server";
+import { getT } from "@/i18n/server";
 
 export default async function ProjectsPage() {
   const [t, user, summaries, list] = await Promise.all([
-    getDictionary(),
+    getT(),
     getCurrentUser(),
     getProjectSummaries(),
     listProjects({ includeInactive: true }),
@@ -29,8 +29,8 @@ export default async function ProjectsPage() {
   return (
     <div>
       <PageHeader
-        title={t.projects.title}
-        description={t.projects.subtitle}
+        title={t("projects.title")}
+        description={t("projects.subtitle")}
         actions={user && roleCan(user.role, "project:write") ? <ProjectFormDialog /> : undefined}
       />
       <ProjectsTable projects={projects} />

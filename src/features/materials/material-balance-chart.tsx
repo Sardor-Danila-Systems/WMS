@@ -4,7 +4,7 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YA
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatLongDate, formatQuantity } from "@/lib/format";
-import { useI18n } from "@/i18n/client";
+import { useIntlTag, useT } from "@/i18n/client";
 import type { BalancePoint } from "@/server/queries";
 
 const LINE_COLOR = "#2563a8";
@@ -25,12 +25,12 @@ function BalanceTooltip({
   payload?: { payload: BalancePoint }[];
   unit: string;
   label: string;
-  locale: Parameters<typeof formatQuantity>[2];
+  locale: string;
 }) {
   if (!active || !payload?.length) return null;
   const point = payload[0].payload;
   return (
-    <div className="rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-sm">
+    <div className="rounded-md border border-border bg-popover px-3 py-2 text-[13px] shadow-sm">
       <div className="mb-1 font-medium text-popover-foreground">
         {formatLongDate(point.day, locale)}
       </div>
@@ -45,11 +45,12 @@ function BalanceTooltip({
 }
 
 export function MaterialBalanceChart({ data, unit }: { data: BalancePoint[]; unit: string }) {
-  const { t, locale } = useI18n();
+  const t = useT();
+  const locale = useIntlTag();
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-[13px] font-semibold">{t.materials.detail.balanceChart}</CardTitle>
+        <CardTitle className="text-[14.5px] font-semibold">{t("materials.detail.balanceChart")}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="h-56 w-full">
@@ -77,7 +78,7 @@ export function MaterialBalanceChart({ data, unit }: { data: BalancePoint[]; uni
                 tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                 width={44}
               />
-              <Tooltip content={<BalanceTooltip unit={unit} label={t.materials.detail.balanceTooltip} locale={locale} />} />
+              <Tooltip content={<BalanceTooltip unit={unit} label={t("materials.detail.balanceTooltip")} locale={locale} />} />
               <Area
                 type="monotone"
                 dataKey="balance"

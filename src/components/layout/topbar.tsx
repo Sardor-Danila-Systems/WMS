@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, User as UserIcon } from "lucide-react";
+import { LogOut, Settings, UserRound } from "lucide-react";
 
 import { sectionKey } from "@/constants/navigation";
 import { logout } from "@/app/actions/auth";
+import { roleCan } from "@/lib/auth/permissions";
 import { useT } from "@/i18n/client";
 import type { SessionUser } from "@/lib/auth/session";
 import { MobileNav } from "./mobile-nav";
@@ -15,7 +17,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -34,10 +35,10 @@ export function Topbar({ user, companyName }: { user: SessionUser; companyName: 
   const t = useT();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur-md sm:px-5">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur-md sm:px-5">
       <MobileNav role={user.role} companyName={companyName} />
-      <h1 className="truncate text-sm font-semibold tracking-tight">
-        {t.nav[sectionKey(pathname)] as string}
+      <h1 className="truncate text-[19px] font-semibold tracking-tight">
+        {t(`nav.${sectionKey(pathname)}`)}
       </h1>
 
       <div className="ml-auto flex items-center gap-2">
@@ -46,50 +47,67 @@ export function Topbar({ user, companyName }: { user: SessionUser; companyName: 
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <Button
-                variant="ghost"
-                className="h-9 gap-2 px-1.5 sm:pr-2.5"
-                aria-label={t.nav.userMenu}
-              />
+              <Button variant="ghost" className="h-11 gap-2.5 px-1.5 sm:pr-3" aria-label={t("nav.userMenu")} />
             }
           >
-            <Avatar className="h-7 w-7">
-              <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
+            <Avatar className="h-9 w-9">
+              <AvatarFallback className="bg-primary/10 text-[13px] font-semibold text-primary">
                 {initials(user.fullName)}
               </AvatarFallback>
             </Avatar>
             <span className="hidden text-left leading-tight lg:block">
-              <span className="block text-[12px] font-medium">{user.fullName}</span>
-              <span className="block text-[11px] text-muted-foreground">
-                {t.roles[user.role]}
-              </span>
+              <span className="block text-[15px] font-medium">{user.fullName}</span>
+              {/* Логин виден сразу: по нему понятно, под какой учётной записью работаешь. */}
+              <span className="block text-[13px] text-muted-foreground">@{user.username}</span>
             </span>
           </DropdownMenuTrigger>
 
-          <DropdownMenuContent align="end" className="w-60">
-            <DropdownMenuLabel className="font-normal">
-              <div className="text-sm font-medium">{user.fullName}</div>
-              <div className="text-xs text-muted-foreground">
-                {user.position || t.roles[user.role]} · @{user.username}
+          <DropdownMenuContent align="end" className="w-72">
+            <div className="flex items-center gap-3 px-2 py-2.5">
+              <Avatar className="h-10 w-10">
+                <AvatarFallback className="bg-primary/10 text-[14.5px] font-semibold text-primary">
+                  {initials(user.fullName)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <div className="truncate text-[16px] font-medium leading-tight">
+                  {user.fullName}
+                </div>
+                <div className="truncate text-[14.5px] text-muted-foreground">@{user.username}</div>
               </div>
-            </DropdownMenuLabel>
+            </div>
+
+            <div className="px-2 pb-2">
+              <div className="flex items-center gap-1.5 rounded-md bg-muted/70 px-2.5 py-1.5 text-[13px] text-muted-foreground">
+                <UserRound className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">
+                  {user.position ? `${user.position} · ${t(`roles.${user.role}`)}` : t(`roles.${user.role}`)}
+                </span>
+              </div>
+            </div>
+
             <DropdownMenuSeparator />
-            <DropdownMenuItem disabled>
-              <UserIcon className="h-4 w-4" />
-              {t.roles[user.role]}
-            </DropdownMenuItem>
-            {/* На узком экране переключатель языка живёт в этом меню. */}
-            <div className="px-2 py-1.5 sm:hidden">
+
+            {/* Переключатель языка нужен и на телефоне, где его нет в шапке. */}
+            <div className="px-2 py-2 sm:hidden">
               <LanguageSwitch className="w-full justify-center" />
             </div>
-            <DropdownMenuSeparator />
+
+            {roleCan(user.role, "settings:write") && (
+              <DropdownMenuItem render={<Link href="/settings" />} className="text-[15px]">
+                <Settings className="h-4 w-4" />
+                {t("nav.settings")}
+              </DropdownMenuItem>
+            )}
+
             <DropdownMenuItem
+              className="text-[15px]"
               onClick={() => {
                 void logout();
               }}
             >
               <LogOut className="h-4 w-4" />
-              {t.auth.signOut}
+              {t("auth.signOut")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

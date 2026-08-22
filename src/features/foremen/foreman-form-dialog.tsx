@@ -59,7 +59,7 @@ export function ForemanFormDialog({
   const { submit, isPending } = useActionSubmit<Values>({
     action: saveForeman,
     setError,
-    successTitle: isEdit ? t.foremen.saved : t.foremen.created,
+    successTitle: isEdit ? t("foremen.saved") : t("foremen.created"),
     onSuccess: () => {
       setOpen(false);
       if (!isEdit) reset();
@@ -72,14 +72,14 @@ export function ForemanFormDialog({
         render={<Button size="sm" variant={isEdit ? "outline" : "default"} className="gap-1.5" />}
       >
         {isEdit ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-        {isEdit ? t.common.edit : t.foremen.add}
+        {isEdit ? t("common.edit") : t("foremen.add")}
       </DialogTrigger>
 
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEdit ? t.foremen.edit : t.foremen.create}</DialogTitle>
+          <DialogTitle>{isEdit ? t("foremen.edit") : t("foremen.create")}</DialogTitle>
           <DialogDescription>
-            {t.foremen.hint}
+            {t("foremen.hint")}
           </DialogDescription>
         </DialogHeader>
 
@@ -87,9 +87,9 @@ export function ForemanFormDialog({
           onSubmit={handleSubmit((values) => submit({ ...values, id: foreman?.id }))}
           className="space-y-4"
         >
-          <FormField label={t.foremen.fullName} required error={errors.name?.message}>
+          <FormField label={t("foremen.fullName")} required error={errors.name?.message}>
             <Input
-              placeholder={t.foremen.namePlaceholder}
+              placeholder={t("foremen.namePlaceholder")}
               autoFocus
               disabled={isPending}
               aria-invalid={Boolean(errors.name)}
@@ -98,42 +98,42 @@ export function ForemanFormDialog({
           </FormField>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label={t.foremen.phone} error={errors.phone?.message}>
-              <Input placeholder={t.foremen.phonePlaceholder} disabled={isPending} {...register("phone")} />
+            <FormField label={t("foremen.phone")} error={errors.phone?.message}>
+              <Input placeholder={t("foremen.phonePlaceholder")} disabled={isPending} {...register("phone")} />
             </FormField>
 
-            <FormField label={t.foremen.brigade} error={errors.brigade?.message}>
-              <Input placeholder={t.foremen.brigadePlaceholder} disabled={isPending} {...register("brigade")} />
+            <FormField label={t("foremen.brigade")} error={errors.brigade?.message}>
+              <Input placeholder={t("foremen.brigadePlaceholder")} disabled={isPending} {...register("brigade")} />
             </FormField>
           </div>
 
           <SelectField
             control={control}
             name="projectId"
-            label={t.operations.project}
-            placeholder={t.foremen.projectPlaceholder}
+            label={t("operations.project")}
+            placeholder={t("foremen.projectPlaceholder")}
             error={errors.projectId?.message}
             disabled={isPending}
             options={projects.map((p) => ({ value: p.id, label: p.name }))}
           />
 
           {isEdit && (
-            <FormField label={t.common.status}>
-              <label className="flex items-center gap-2 text-sm">
+            <FormField label={t("common.status")}>
+              <label className="flex items-center gap-2 text-[15px]">
                 <input
                   type="checkbox"
                   className="h-4 w-4 rounded border-input accent-primary"
                   disabled={isPending}
                   {...register("isActive")}
                 />
-                {t.foremen.activeLabel}
+                {t("foremen.activeLabel")}
               </label>
             </FormField>
           )}
 
           <DialogFooter>
             <Button type="submit" disabled={isPending}>
-              {isPending ? t.common.saving : isEdit ? t.common.save : t.common.add}
+              {isPending ? t("common.saving") : isEdit ? t("common.save") : t("common.add")}
             </Button>
           </DialogFooter>
         </form>

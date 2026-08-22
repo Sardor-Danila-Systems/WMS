@@ -14,11 +14,27 @@ import {
   Building2,
 } from "lucide-react";
 
-import type { Dictionary } from "@/i18n/types";
 import type { Role } from "@/types";
 
+export type NavKey =
+  | "dashboard"
+  | "materials"
+  | "receipts"
+  | "issues"
+  | "usage"
+  | "returns"
+  | "history"
+  | "foremen"
+  | "projects"
+  | "workers"
+  | "reports"
+  | "settings";
+
+export type NavGroupKey = "overview" | "operations" | "directories" | "analytics";
+
 export interface NavItem {
-  key: keyof Dictionary["nav"];
+  /** Ключ в разделе `nav` файла сообщений. */
+  key: NavKey;
   href: string;
   icon: LucideIcon;
   /** Если задано — пункт виден только этим ролям. */
@@ -26,7 +42,7 @@ export interface NavItem {
 }
 
 export interface NavGroup {
-  key: keyof Dictionary["nav"]["groups"];
+  key: NavGroupKey;
   items: NavItem[];
 }
 
@@ -79,7 +95,7 @@ export function visibleGroups(role: Role): NavGroup[] {
 }
 
 /** Ключ текущего раздела для заголовка верхней панели. */
-export function sectionKey(pathname: string): keyof Dictionary["nav"] {
+export function sectionKey(pathname: string): NavKey {
   if (pathname === "/") return "dashboard";
   const match = [...NAV_ITEMS]
     .sort((a, b) => b.href.length - a.href.length)

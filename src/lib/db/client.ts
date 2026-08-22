@@ -1,128 +1,77 @@
 import "@/lib/server-only";
 
-import { Pool, type PoolClient } from "pg";
+import { PrismaPg } from "@prisma/adapter-pg";
+
+import { PrismaClient } from "@/generated/prisma/client";
 
 /**
- * Подключение к PostgreSQL.
+ * Подключение к PostgreSQL через Prisma.
+ *
+ * Prisma 7 работает только через драйвер-адаптер — здесь это `pg`,
+ * который одинаково подходит и локальному Postgres, и пулеру Neon.
  *
  * В dev-режиме Next.js перезагружает модули при каждом изменении файла,
- * поэтому пул храним в globalThis — иначе на каждой пересборке создавался бы
- *новый набор соединений и база быстро упёрлась бы в лимит.
+ * поэтому клиент хранится в globalThis — иначе на каждой пересборке
+ * создавался бы новый пул соединений и база быстро упёрлась бы в лимит.
  */
-const globalForDb = globalThis as unknown as { __wmsPool?: Pool };
+const globalForPrisma = globalThis as unknown as { __wmsPrisma?: PrismaClient };
 
-function createPool(): Pool {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
+function resolveUrl(): string {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
     throw new Error(
       "Не задана переменная окружения DATABASE_URL. " +
         "Укажите строку подключения к PostgreSQL (например, из Neon) в настройках проекта."
     );
   }
+  return url;
+}
 
-  return new Pool({
-    connectionString,
-    // Neon и другие облачные базы требуют TLS. Локальный Postgres обычно без него.
-    ssl: /\bsslmode=require\b/.test(connectionString) || /neon\.tech/.test(connectionString)
-      ? { rejectUnauthorized: false }
-      : undefined,
+function createClient(): PrismaClient {
+  const url = resolveUrl();
+
+  const adapter = new PrismaPg({
+    connectionString: url,
+    // Облачные базы требуют TLS; локальный Postgres обычно без него.
+    ssl: /neon\.tech|sslmode=require/.test(url) ? { rejectUnauthorized: false } : undefined,
     // На serverless-платформе каждый экземпляр держит мало соединений:
     // их общее число ограничено на стороне базы.
     max: Number(process.env.WMS_DB_POOL_MAX ?? 5),
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
   });
+
+  return new PrismaClient({
+    adapter,
+    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
+    // Значения по умолчанию (2с ожидания, 5с на транзакцию) рассчитаны на
+    // локальную базу. До облачной каждый запрос идёт по сети, поэтому
+    // складской операции из нескольких запросов такого запаса не хватает.
+    transactionOptions: { maxWait: 10_000, timeout: 20_000 },
+  });
 }
 
-export function getPool(): Pool {
-  if (!globalForDb.__wmsPool) {
-    globalForDb.__wmsPool = createPool();
-    // Без обработчика разрыв соединения с базой уронил бы весь процесс.
-    globalForDb.__wmsPool.on("error", (error) => {
-      console.error("[wms] Ошибка соединения с базой данных:", error.message);
-    });
+export function getPrisma(): PrismaClient {
+  if (!globalForPrisma.__wmsPrisma) {
+    globalForPrisma.__wmsPrisma = createClient();
   }
-  return globalForDb.__wmsPool;
+  return globalForPrisma.__wmsPrisma;
 }
 
-/** Значения, которые можно передать параметром запроса. */
-export type SqlParam = string | number | boolean | null | Date;
+/** Короткий доступ к клиенту: `db.material.findMany(...)`. */
+export const db: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    return Reflect.get(getPrisma(), prop);
+  },
+});
+
+/** Клиент внутри транзакции — тот же API, кроме управления транзакциями. */
+export type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
 /**
- * Запросы написаны с плейсхолдерами `?`, а PostgreSQL ожидает `$1, $2, ...`.
- * Преобразование собрано в одном месте, чтобы нумерацию не приходилось
- * поддерживать вручную в каждом запросе — это самый частый источник ошибок
- * при переносе SQL. В запросах нет строковых литералов со знаком «?»,
- * поэтому простой замены достаточно.
+ * Выполняет callback в транзакции. Любая ошибка внутри откатывает всё целиком,
+ * поэтому остаток склада и запись движения не могут разъехаться.
  */
-function toPositionalParams(sql: string): string {
-  let index = 0;
-  return sql.replace(/\?/g, () => `$${++index}`);
-}
-
-/** Единый интерфейс доступа к данным: и для пула, и внутри транзакции. */
-export interface Db {
-  all<T>(sql: string, ...params: SqlParam[]): Promise<T[]>;
-  one<T>(sql: string, ...params: SqlParam[]): Promise<T | undefined>;
-  run(sql: string, ...params: SqlParam[]): Promise<{ changes: number }>;
-}
-
-function makeDb(executor: Pool | PoolClient): Db {
-  return {
-    async all<T>(sql: string, ...params: SqlParam[]): Promise<T[]> {
-      const result = await executor.query(toPositionalParams(sql), params);
-      return result.rows as T[];
-    },
-    async one<T>(sql: string, ...params: SqlParam[]): Promise<T | undefined> {
-      const result = await executor.query(toPositionalParams(sql), params);
-      return result.rows[0] as T | undefined;
-    },
-    async run(sql: string, ...params: SqlParam[]): Promise<{ changes: number }> {
-      const result = await executor.query(toPositionalParams(sql), params);
-      return { changes: result.rowCount ?? 0 };
-    },
-  };
-}
-
-/** Доступ к данным вне транзакции — каждый запрос берёт свободное соединение из пула. */
-export const db: Db = {
-  all: (sql, ...params) => makeDb(getPool()).all(sql, ...params),
-  one: (sql, ...params) => makeDb(getPool()).one(sql, ...params),
-  run: (sql, ...params) => makeDb(getPool()).run(sql, ...params),
-};
-
-export function queryAll<T>(sql: string, ...params: SqlParam[]): Promise<T[]> {
-  return db.all<T>(sql, ...params);
-}
-
-export function queryOne<T>(sql: string, ...params: SqlParam[]): Promise<T | undefined> {
-  return db.one<T>(sql, ...params);
-}
-
-export function execute(sql: string, ...params: SqlParam[]): Promise<{ changes: number }> {
-  return db.run(sql, ...params);
-}
-
-/**
- * Выполняет callback в транзакции на одном соединении.
- * Любая ошибка внутри откатывает всё целиком, поэтому остаток склада
- * и запись движения не могут разъехаться.
- */
-export async function transaction<T>(fn: (tx: Db) => Promise<T>): Promise<T> {
-  const client = await getPool().connect();
-  try {
-    await client.query("BEGIN");
-    const result = await fn(makeDb(client));
-    await client.query("COMMIT");
-    return result;
-  } catch (error) {
-    try {
-      await client.query("ROLLBACK");
-    } catch {
-      // Соединение уже могло откатить транзакцию само — исходную ошибку это не отменяет.
-    }
-    throw error;
-  } finally {
-    client.release();
-  }
+export function transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return getPrisma().$transaction(fn);
 }

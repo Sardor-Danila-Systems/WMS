@@ -1,21 +1,46 @@
 import "@/lib/server-only";
 
-import { cache } from "react";
-import { cookies } from "next/headers";
+import { getLocale as getIntlLocale, getTranslations } from "next-intl/server";
 
-import { getDictionaryFor } from "./index";
-import { DEFAULT_LOCALE, isLocale, LOCALE_COOKIE, type Dictionary, type Locale } from "./types";
+import type { LooseTranslate } from "./loose";
+import { INTL_LOCALE, type Locale } from "./types";
+
+/** Текущий язык интерфейса на сервере. */
+export async function getLocale(): Promise<Locale> {
+  return (await getIntlLocale()) as Locale;
+}
+
+/** Переводчик для серверных компонентов и server actions. */
+export async function getT() {
+  return getTranslations();
+}
+
+/** Локаль для Intl-форматирования чисел и дат. */
+export async function getIntlTag(): Promise<string> {
+  return INTL_LOCALE[await getLocale()];
+}
 
 /**
- * Текущий язык из cookie. Читается один раз за проход рендера —
- * его запрашивают почти все серверные компоненты страницы.
+ * Переводчик справочных значений на сервере: категории, единицы измерения
+ * и причины возврата хранятся в базе по-русски и переводятся при показе.
  */
-export const getLocale = cache(async (): Promise<Locale> => {
-  const value = (await cookies()).get(LOCALE_COOKIE)?.value;
-  return isLocale(value) ? value : DEFAULT_LOCALE;
-});
+export async function getValueTranslator(
+  namespace: "units" | "categories" | "returnReasons"
+): Promise<(value: string | null | undefined) => string> {
+  const t = await getTranslations(namespace);
+  return (value) => {
+    if (!value) return "";
+    // @ts-expect-error — ключ приходит из данных, а не из типа сообщений
+    return t.has(value) ? (t(value) as string) : value;
+  };
+}
 
-/** Словарь для серверных компонентов и server actions. */
-export const getDictionary = cache(async (): Promise<Dictionary> => {
-  return getDictionaryFor(await getLocale());
-});
+/**
+ * Переводчик со свободной сигнатурой — для мест, где ключ вычисляется
+ * из кода ошибки, а не пишется литералом. Приведение типа собрано здесь,
+ * чтобы не повторяться в каждом вызове.
+ */
+export async function getLooseT(): Promise<LooseTranslate> {
+  const t = await getTranslations();
+  return (key, values) => (t as unknown as LooseTranslate)(key, values);
+}

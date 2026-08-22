@@ -30,13 +30,13 @@ export default function ErrorBoundary({
         <div className="mx-auto mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
           <AlertTriangle className="h-5 w-5" />
         </div>
-        <h2 className="text-base font-semibold tracking-tight">{t.errorPages.errorTitle}</h2>
-        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
-          {t.errorPages.errorHint}
+        <h2 className="text-base font-semibold tracking-tight">{t("errorPages.errorTitle")}</h2>
+        <p className="mt-2 text-[14.5px] leading-relaxed text-muted-foreground">
+          {t("errorPages.errorHint")}
         </p>
         <Button onClick={reset} className="mt-5 gap-2">
           <RotateCcw className="h-4 w-4" />
-          {t.errorPages.retry}
+          {t("errorPages.retry")}
         </Button>
       </div>
     </div>

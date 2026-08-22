@@ -36,15 +36,15 @@ export function MaterialDeleteButton({
         onClick={() => setOpen(true)}
       >
         <Trash2 className="h-3.5 w-3.5" />
-        {t.common.delete}
+        {t("common.delete")}
       </Button>
 
       <ConfirmDialog
         open={open}
         onOpenChange={setOpen}
-        title={t.materials.deleteTitle(material.name)}
-        description={t.materials.deleteHint}
-        successMessage={t.materials.deleted}
+        title={t("materials.deleteTitle", { name: material.name })}
+        description={t("materials.deleteHint")}
+        successMessage={t("materials.deleted")}
         action={async () => {
           const result = await removeMaterial(material.id);
           if (result.ok) router.push("/materials");

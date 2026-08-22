@@ -1,8 +1,6 @@
 import "@/lib/server-only";
 
-import { randomUUID } from "node:crypto";
-
-import { queryAll, transaction, type Db } from "@/lib/db/client";
+import { db, transaction, type Tx } from "@/lib/db/client";
 import { roundQty } from "@/lib/validation";
 import type { MovementType } from "@/types";
 import { BusinessError } from "./errors";
@@ -34,35 +32,23 @@ const DELTAS: Record<MovementType, { warehouse: 1 | -1 | 0; foreman: 1 | -1 | 0;
   RETURN: { warehouse: 1, foreman: -1, needsForeman: true },
 };
 
-interface MaterialRow {
-  id: string;
-  name: string;
-  unit: string;
-  quantity: number;
-  is_active: number;
-}
-
-/**
- * Единая точка записи любого движения материала.
- *
- * Всё выполняется в одной транзакции (BEGIN IMMEDIATE): остатки читаются уже
- * под блокировкой записи, поэтому проверка «хватает ли материала» и последующее
- * списание не могут разъехаться между двумя одновременными операциями —
- * двойная выдача исключена. Любая ошибка откатывает операцию целиком,
- * и в базе не остаётся ни изменённого остатка, ни висячей записи движения.
- */
 export function recordMovement(input: RecordMovementInput): Promise<{ movementId: string }> {
   return transaction((tx) => recordMovementInTx(tx, input));
 }
 
 /**
- * Тело операции без открытия транзакции — чтобы её можно было выполнить
- * внутри уже начатой (например, «создать материал + записать начальный остаток»
- * должно быть одной неделимой операцией).
+ * Единая точка записи любого движения материала.
+ *
+ * Всё выполняется в одной транзакции: строка материала блокируется через
+ * SELECT ... FOR UPDATE, поэтому проверка «хватает ли материала» и последующее
+ * списание не могут разъехаться между двумя одновременными операциями —
+ * двойная выдача исключена. Любая ошибка откатывает операцию целиком,
+ * и в базе не остаётся ни изменённого остатка, ни висячей записи движения.
+ *
  * Вызывать только внутри `transaction()`.
  */
 export async function recordMovementInTx(
-  tx: Db,
+  tx: Tx,
   input: RecordMovementInput
 ): Promise<{ movementId: string }> {
   const rules = DELTAS[input.type];
@@ -82,119 +68,102 @@ export async function recordMovementInTx(
     throw new BusinessError("FOREMAN_REQUIRED", { field: "foremanId" });
   }
 
-  {
-    // FOR UPDATE блокирует строку материала до конца транзакции: параллельная
-    // операция дождётся коммита и увидит уже уменьшенный остаток.
-    // Именно это делает невозможной двойную выдачу одного и того же материала.
-    const material = await tx.one<MaterialRow>(
-      "SELECT id, name, unit, quantity, is_active FROM materials WHERE id = ? FOR UPDATE",
-      input.materialId
-    );
+  // FOR UPDATE блокирует строку материала до конца транзакции: параллельная
+  // операция дождётся коммита и увидит уже уменьшенный остаток.
+  const locked = await tx.$queryRaw<{ id: string; name: string; unit: string; quantity: number; is_active: boolean }[]>`
+    SELECT id, name, unit, quantity, is_active FROM materials WHERE id = ${input.materialId} FOR UPDATE
+  `;
+  const material = locked[0];
 
-    if (!material) throw new BusinessError("MATERIAL_NOT_FOUND", { field: "materialId" });
-    if (material.is_active !== 1) {
-      throw new BusinessError("MATERIAL_ARCHIVED", { field: "materialId" });
+  if (!material) throw new BusinessError("MATERIAL_NOT_FOUND", { field: "materialId" });
+  if (!material.is_active) {
+    throw new BusinessError("MATERIAL_ARCHIVED", { field: "materialId" });
+  }
+
+  if (foremanId) {
+    const foreman = await tx.foreman.findUnique({
+      where: { id: foremanId },
+      select: { id: true, isActive: true },
+    });
+    if (!foreman) throw new BusinessError("FOREMAN_NOT_FOUND", { field: "foremanId" });
+    if (!foreman.isActive) {
+      throw new BusinessError("FOREMAN_INACTIVE", { field: "foremanId" });
     }
+  }
 
-    if (foremanId) {
-      const foreman = await tx.one<{ id: string; is_active: number }>(
-        "SELECT id, is_active FROM foremen WHERE id = ?",
-        foremanId
+  const warehouseDelta = roundQty(quantity * rules.warehouse);
+  const foremanDelta = roundQty(quantity * rules.foreman);
+
+  // --- Проверка склада -------------------------------------------------
+  const warehouseAfter = roundQty(material.quantity + warehouseDelta);
+  if (warehouseAfter < 0) {
+    throw new BusinessError("INSUFFICIENT_STOCK", {
+      field: "quantity",
+      amount: { value: material.quantity, unit: material.unit },
+    });
+  }
+
+  // --- Проверка остатка у бригадира ------------------------------------
+  let foremanAfter: number | null = null;
+  let foremanBefore = 0;
+  if (foremanId) {
+    const held = await tx.$queryRaw<{ quantity: number }[]>`
+      SELECT quantity FROM foreman_stock
+       WHERE foreman_id = ${foremanId} AND material_id = ${material.id}
+       FOR UPDATE
+    `;
+    foremanBefore = held[0]?.quantity ?? 0;
+    foremanAfter = roundQty(foremanBefore + foremanDelta);
+
+    if (foremanAfter < 0) {
+      throw new BusinessError(
+        input.type === "RETURN"
+          ? "INSUFFICIENT_FOREMAN_STOCK_RETURN"
+          : "INSUFFICIENT_FOREMAN_STOCK_USAGE",
+        { field: "quantity", amount: { value: foremanBefore, unit: material.unit } }
       );
-      if (!foreman) throw new BusinessError("FOREMAN_NOT_FOUND", { field: "foremanId" });
-      if (foreman.is_active !== 1) {
-        throw new BusinessError("FOREMAN_INACTIVE", { field: "foremanId" });
-      }
     }
+  }
 
-    const warehouseDelta = roundQty(quantity * rules.warehouse);
-    const foremanDelta = roundQty(quantity * rules.foreman);
-
-    // --- Проверка склада -------------------------------------------------
-    const warehouseAfter = roundQty(material.quantity + warehouseDelta);
-    if (warehouseAfter < 0) {
-      throw new BusinessError("INSUFFICIENT_STOCK", {
-        field: "quantity",
-        amount: { value: material.quantity, unit: material.unit },
-      });
-    }
-
-    // --- Проверка остатка у бригадира ------------------------------------
-    let foremanAfter: number | null = null;
-    if (foremanId) {
-      const current = await tx.one<{ quantity: number }>(
-        "SELECT quantity FROM foreman_stock WHERE foreman_id = ? AND material_id = ? FOR UPDATE",
-        foremanId,
-        material.id
-      );
-      const foremanBefore = current?.quantity ?? 0;
-      foremanAfter = roundQty(foremanBefore + foremanDelta);
-
-      if (foremanAfter < 0) {
-        throw new BusinessError(
-          input.type === "RETURN"
-            ? "INSUFFICIENT_FOREMAN_STOCK_RETURN"
-            : "INSUFFICIENT_FOREMAN_STOCK_USAGE",
-          { field: "quantity", amount: { value: foremanBefore, unit: material.unit } }
-        );
-      }
-    }
-
-    const now = new Date().toISOString();
-
-    // --- Запись движения (журнал пишется всегда) -------------------------
-    const movementId = randomUUID();
-    await tx.run(
-      `INSERT INTO stock_movements (
-         id, type, material_id, quantity, occurred_at, created_at,
-         user_id, foreman_id, supplier_id, project_id,
-         vehicle_number, reason, comment,
-         warehouse_delta, foreman_delta, warehouse_after, foreman_after
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      movementId,
-      input.type,
-      material.id,
+  // --- Запись движения (журнал пишется всегда) -------------------------
+  const movement = await tx.stockMovement.create({
+    data: {
+      type: input.type,
+      materialId: material.id,
       quantity,
-      occurred.toISOString(),
-      now,
-      input.userId,
+      occurredAt: occurred,
+      userId: input.userId,
       foremanId,
-      input.supplierId?.trim() || null,
-      input.projectId?.trim() || null,
-      input.vehicleNumber?.trim() ?? "",
-      input.reason?.trim() ?? "",
-      input.comment?.trim() ?? "",
+      supplierId: input.supplierId?.trim() || null,
+      projectId: input.projectId?.trim() || null,
+      vehicleNumber: input.vehicleNumber?.trim() ?? "",
+      reason: input.reason?.trim() ?? "",
+      comment: input.comment?.trim() ?? "",
       warehouseDelta,
       foremanDelta,
       warehouseAfter,
-      foremanAfter
-    );
+      foremanAfter,
+    },
+    select: { id: true },
+  });
 
-    // --- Обновление остатков ---------------------------------------------
-    if (warehouseDelta !== 0) {
-      await tx.run(
-        "UPDATE materials SET quantity = ?, updated_at = ? WHERE id = ?",
-        warehouseAfter,
-        now,
-        material.id
-      );
-    }
-
-    if (foremanId && foremanDelta !== 0) {
-      await tx.run(
-        `INSERT INTO foreman_stock (foreman_id, material_id, quantity, updated_at)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT (foreman_id, material_id)
-         DO UPDATE SET quantity = excluded.quantity, updated_at = excluded.updated_at`,
-        foremanId,
-        material.id,
-        foremanAfter,
-        now
-      );
-    }
-
-    return { movementId };
+  // --- Обновление остатков ---------------------------------------------
+  if (warehouseDelta !== 0) {
+    await tx.material.update({
+      where: { id: material.id },
+      data: { quantity: warehouseAfter },
+    });
   }
+
+  if (foremanId && foremanDelta !== 0) {
+    await tx.foremanStock.upsert({
+      where: { foremanId_materialId: { foremanId, materialId: material.id } },
+      create: { foremanId, materialId: material.id, quantity: foremanAfter! },
+      update: { quantity: foremanAfter! },
+    });
+  }
+
+  return { movementId: movement.id };
 }
 
 /**
@@ -206,31 +175,25 @@ export async function verifyLedgerConsistency(): Promise<{
   materialMismatches: { id: string; name: string; stored: number; computed: number }[];
   foremanMismatches: { foremanId: string; materialId: string; stored: number; computed: number }[];
 }> {
-  const materialMismatches = await queryAll<{
-    id: string;
-    name: string;
-    stored: number;
-    computed: number;
-  }>(
-    `SELECT m.id, m.name, m.quantity AS stored,
-            COALESCE((SELECT SUM(warehouse_delta) FROM stock_movements WHERE material_id = m.id), 0) AS computed
-       FROM materials m
-      WHERE ABS(m.quantity - COALESCE((SELECT SUM(warehouse_delta) FROM stock_movements WHERE material_id = m.id), 0)) > 0.0005`
-  );
+  const materialMismatches = await db.$queryRaw<
+    { id: string; name: string; stored: number; computed: number }[]
+  >`
+    SELECT m.id, m.name, m.quantity AS stored,
+           COALESCE((SELECT SUM(warehouse_delta) FROM stock_movements WHERE material_id = m.id), 0) AS computed
+      FROM materials m
+     WHERE ABS(m.quantity - COALESCE((SELECT SUM(warehouse_delta) FROM stock_movements WHERE material_id = m.id), 0)) > 0.0005
+  `;
 
-  const foremanMismatches = await queryAll<{
-    foremanId: string;
-    materialId: string;
-    stored: number;
-    computed: number;
-  }>(
-    `SELECT fs.foreman_id AS "foremanId", fs.material_id AS "materialId", fs.quantity AS stored,
-            COALESCE((SELECT SUM(foreman_delta) FROM stock_movements sm
-                       WHERE sm.foreman_id = fs.foreman_id AND sm.material_id = fs.material_id), 0) AS computed
-       FROM foreman_stock fs
-      WHERE ABS(fs.quantity - COALESCE((SELECT SUM(foreman_delta) FROM stock_movements sm
-                       WHERE sm.foreman_id = fs.foreman_id AND sm.material_id = fs.material_id), 0)) > 0.0005`
-  );
+  const foremanMismatches = await db.$queryRaw<
+    { foremanId: string; materialId: string; stored: number; computed: number }[]
+  >`
+    SELECT fs.foreman_id AS "foremanId", fs.material_id AS "materialId", fs.quantity AS stored,
+           COALESCE((SELECT SUM(foreman_delta) FROM stock_movements sm
+                      WHERE sm.foreman_id = fs.foreman_id AND sm.material_id = fs.material_id), 0) AS computed
+      FROM foreman_stock fs
+     WHERE ABS(fs.quantity - COALESCE((SELECT SUM(foreman_delta) FROM stock_movements sm
+                      WHERE sm.foreman_id = fs.foreman_id AND sm.material_id = fs.material_id), 0)) > 0.0005
+  `;
 
   return {
     ok: materialMismatches.length === 0 && foremanMismatches.length === 0,

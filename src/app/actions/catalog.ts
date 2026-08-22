@@ -3,8 +3,8 @@
 import { refresh } from "next/cache";
 
 import { requirePermission } from "@/lib/auth/dal";
-import { getDictionary, getLocale } from "@/i18n/server";
-import { translateValidation } from "@/i18n";
+import { getIntlTag, getLooseT, getT, getValueTranslator } from "@/i18n/server";
+import { translateValidation } from "@/i18n/validation";
 import {
   foremanSchema,
   materialSchema,
@@ -41,7 +41,7 @@ async function firstIssue(error: { issues: { message: string; path: PropertyKey[
   const issue = error.issues[0];
   return {
     ok: false as const,
-    error: translateValidation(await getDictionary(), issue.message),
+    error: translateValidation(await getLooseT(), issue.message),
     field: String(issue.path[0] ?? ""),
   };
 }
@@ -73,12 +73,20 @@ export async function saveMaterial(formData: FormData): Promise<ActionResult<{ i
       minStock: parsed.data.minStock,
       initialQuantity: parsed.data.initialQuantity,
       userId: user.id,
-      initialStockComment: (await getDictionary()).seed.initialStockComment,
+      initialStockComment: (await getT())("seed.initialStockComment"),
     });
     refresh();
     return { ok: true, data: created };
   } catch (error) {
-    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
+    return {
+      ok: false,
+      ...toActionError(
+        error,
+        await getLooseT(),
+        await getIntlTag(),
+        await getValueTranslator("units")
+      ),
+    };
   }
 }
 
@@ -89,7 +97,15 @@ export async function removeMaterial(id: string): Promise<ActionResult> {
     refresh();
     return { ok: true };
   } catch (error) {
-    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
+    return {
+      ok: false,
+      ...toActionError(
+        error,
+        await getLooseT(),
+        await getIntlTag(),
+        await getValueTranslator("units")
+      ),
+    };
   }
 }
 
@@ -100,7 +116,15 @@ export async function archiveMaterial(id: string, archived: boolean): Promise<Ac
     refresh();
     return { ok: true };
   } catch (error) {
-    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
+    return {
+      ok: false,
+      ...toActionError(
+        error,
+        await getLooseT(),
+        await getIntlTag(),
+        await getValueTranslator("units")
+      ),
+    };
   }
 }
 
@@ -125,7 +149,15 @@ export async function saveForeman(formData: FormData): Promise<ActionResult<{ id
     refresh();
     return { ok: true, data: created };
   } catch (error) {
-    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
+    return {
+      ok: false,
+      ...toActionError(
+        error,
+        await getLooseT(),
+        await getIntlTag(),
+        await getValueTranslator("units")
+      ),
+    };
   }
 }
 
@@ -150,7 +182,15 @@ export async function saveProject(formData: FormData): Promise<ActionResult<{ id
     refresh();
     return { ok: true, data: created };
   } catch (error) {
-    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
+    return {
+      ok: false,
+      ...toActionError(
+        error,
+        await getLooseT(),
+        await getIntlTag(),
+        await getValueTranslator("units")
+      ),
+    };
   }
 }
 
@@ -175,7 +215,15 @@ export async function saveSupplier(formData: FormData): Promise<ActionResult<{ i
     refresh();
     return { ok: true, data: created };
   } catch (error) {
-    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
+    return {
+      ok: false,
+      ...toActionError(
+        error,
+        await getLooseT(),
+        await getIntlTag(),
+        await getValueTranslator("units")
+      ),
+    };
   }
 }
 
@@ -193,7 +241,7 @@ export async function saveUser(formData: FormData): Promise<ActionResult<{ id: s
       if (password && password.length < 6) {
         return {
           ok: false,
-          error: (await getDictionary()).validation.passwordMin,
+          error: (await getT())("validation.passwordMin"),
           field: "password",
         };
       }
@@ -216,7 +264,15 @@ export async function saveUser(formData: FormData): Promise<ActionResult<{ id: s
     refresh();
     return { ok: true, data: created };
   } catch (error) {
-    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
+    return {
+      ok: false,
+      ...toActionError(
+        error,
+        await getLooseT(),
+        await getIntlTag(),
+        await getValueTranslator("units")
+      ),
+    };
   }
 }
 
@@ -230,6 +286,14 @@ export async function saveSettings(formData: FormData): Promise<ActionResult> {
     refresh();
     return { ok: true };
   } catch (error) {
-    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
+    return {
+      ok: false,
+      ...toActionError(
+        error,
+        await getLooseT(),
+        await getIntlTag(),
+        await getValueTranslator("units")
+      ),
+    };
   }
 }

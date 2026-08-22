@@ -7,8 +7,8 @@ import { Search } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/shared/components/data-table";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { declOf, formatDate } from "@/lib/format";
-import { useI18n } from "@/i18n/client";
+import { formatDate } from "@/lib/format";
+import { useIntlTag, useT } from "@/i18n/client";
 import type { Foreman } from "@/types";
 import type { ForemanSummary } from "@/server/queries";
 
@@ -18,7 +18,8 @@ export interface ForemanRowData extends Foreman {
 
 export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
   const router = useRouter();
-  const { t, locale } = useI18n();
+  const t = useT();
+  const locale = useIntlTag();
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
@@ -34,18 +35,18 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
   const columns: DataTableColumn<ForemanRowData>[] = [
     {
       id: "name",
-      header: t.operations.foreman,
+      header: t("operations.foreman"),
       accessor: (f) => (
         <div className="min-w-0">
           <div className="truncate font-medium">{f.name}</div>
-          <div className="truncate text-xs text-muted-foreground">{f.brigade || "—"}</div>
+          <div className="truncate text-[13px] text-muted-foreground">{f.brigade || "—"}</div>
         </div>
       ),
       sortValue: (f) => f.name,
     },
     {
       id: "project",
-      header: t.operations.project,
+      header: t("operations.project"),
       accessor: (f) => (
         <span className="text-muted-foreground">{f.projectName ?? "—"}</span>
       ),
@@ -53,31 +54,25 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
     },
     {
       id: "phone",
-      header: t.foremen.phone,
+      header: t("foremen.phone"),
       accessor: (f) => <span className="whitespace-nowrap text-muted-foreground">{f.phone || "—"}</span>,
     },
     {
       id: "onHand",
-      header: t.foremen.onHand,
+      header: t("foremen.onHand"),
       accessor: (f) =>
         f.summary.positions > 0 ? (
           <Badge variant="outline" className="border-orange-200 bg-orange-50 text-orange-700">
-            {f.summary.positions}{" "}
-            {declOf(
-              f.summary.positions,
-              t.dashboard.positionWord.one,
-              t.dashboard.positionWord.few,
-              t.dashboard.positionWord.many
-            )}
+            {t("dashboard.positions", { count: f.summary.positions })}
           </Badge>
         ) : (
-          <span className="text-xs text-muted-foreground">{t.foremen.nothingOnHand}</span>
+          <span className="text-[13px] text-muted-foreground">{t("foremen.nothingOnHand")}</span>
         ),
       sortValue: (f) => f.summary.positions,
     },
     {
       id: "issued",
-      header: t.foremen.issueCount,
+      header: t("foremen.issueCount"),
       accessor: (f) => (
         <span className="tabular-nums text-muted-foreground">{f.summary.issueCount}</span>
       ),
@@ -87,7 +82,7 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
     },
     {
       id: "used",
-      header: t.foremen.usageCount,
+      header: t("foremen.usageCount"),
       accessor: (f) => (
         <span className="tabular-nums text-muted-foreground">{f.summary.usageCount}</span>
       ),
@@ -97,7 +92,7 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
     },
     {
       id: "returned",
-      header: t.foremen.returnCount,
+      header: t("foremen.returnCount"),
       accessor: (f) => (
         <span className="tabular-nums text-muted-foreground">{f.summary.returnCount}</span>
       ),
@@ -107,7 +102,7 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
     },
     {
       id: "last",
-      header: t.foremen.lastOperation,
+      header: t("foremen.lastOperation"),
       accessor: (f) => (
         <span className="whitespace-nowrap text-muted-foreground">
           {f.summary.lastOperationAt ? formatDate(f.summary.lastOperationAt, locale) : "—"}
@@ -124,9 +119,9 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder={t.foremen.searchPlaceholder}
+          placeholder={t("foremen.searchPlaceholder")}
           className="pl-8"
-          aria-label={t.common.search}
+          aria-label={t("common.search")}
         />
       </div>
 
@@ -135,7 +130,7 @@ export function ForemenTable({ foremen }: { foremen: ForemanRowData[] }) {
         data={filtered}
         rowKey={(f) => f.id}
         pageSize={12}
-        emptyMessage={t.foremen.notFound}
+        emptyMessage={t("foremen.notFound")}
         onRowClick={(f) => router.push(`/foremen/${f.id}`)}
         mobileCard={(f) => ({
           title: f.name,

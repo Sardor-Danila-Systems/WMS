@@ -2,7 +2,7 @@ import Link from "next/link";
 import { FileQuestion } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { getDictionary } from "@/i18n/server";
+import { getT } from "@/i18n/server";
 
 /**
  * Запись не найдена (например, открыли ссылку на удалённый материал).
@@ -10,7 +10,7 @@ import { getDictionary } from "@/i18n/server";
  * меню и он мог продолжить работу, а не оказался на пустой странице.
  */
 export default async function AppNotFound() {
-  const t = await getDictionary();
+  const t = await getT();
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4">
@@ -19,11 +19,11 @@ export default async function AppNotFound() {
           <FileQuestion className="h-5 w-5" />
         </div>
         <h2 className="text-base font-semibold tracking-tight">
-          {t.errorPages.recordNotFoundTitle}
+          {t("errorPages.recordNotFoundTitle")}
         </h2>
-        <p className="mt-2 text-[13px] text-muted-foreground">{t.errorPages.recordNotFoundHint}</p>
+        <p className="mt-2 text-[14.5px] text-muted-foreground">{t("errorPages.recordNotFoundHint")}</p>
         <Button render={<Link href="/" />} className="mt-5">
-          {t.errorPages.toDashboard}
+          {t("errorPages.toDashboard")}
         </Button>
       </div>
     </div>

@@ -23,34 +23,34 @@ export function ExportMenu({ onExportCsv, onExportXlsx, label }: ExportMenuProps
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="gap-1.5" />}>
         <Download className="h-3.5 w-3.5" />
-        {label ?? t.common.export}
+        {label ?? t("common.export")}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem
           onClick={() => {
             onExportXlsx();
-            toast.success(t.reports.export.excelDone);
+            toast.success(t("reports.export.excelDone"));
           }}
         >
           <FileSpreadsheet className="h-4 w-4 text-green-600" />
-          {t.reports.export.excel}
+          {t("reports.export.excel")}
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => {
             onExportCsv();
-            toast.success(t.reports.export.csvDone);
+            toast.success(t("reports.export.csvDone"));
           }}
         >
           <FileText className="h-4 w-4 text-blue-600" />
-          {t.reports.export.csv}
+          {t("reports.export.csv")}
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled
-          onClick={() => toast.info(t.reports.export.pdfSoon)}
+          onClick={() => toast.info(t("reports.export.pdfSoon"))}
         >
           <FileType className="h-4 w-4 text-red-600" />
-          {t.reports.export.pdf}
-          <span className="ml-auto text-[10px] text-muted-foreground">{t.reports.export.soon}</span>
+          {t("reports.export.pdf")}
+          <span className="ml-auto text-[11px] text-muted-foreground">{t("reports.export.soon")}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

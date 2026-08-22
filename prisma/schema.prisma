@@ -1,0 +1,187 @@
+// Схема склада строительных материалов.
+//
+// Ключевая идея учёта: StockMovement — неизменяемый журнал операций и
+// единственный источник правды. Остатки в Material.quantity и
+// ForemanStock.quantity — производные значения, которые меняются только
+// в одной транзакции с записью движения.
+//
+// CHECK-ограничения (quantity >= 0 и т.п.) Prisma в схеме не выражает,
+// поэтому они добавлены SQL-ом в миграции 0002_integrity_checks —
+// без них отрицательный остаток защищён только кодом приложения.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  WAREHOUSE_WORKER
+}
+
+enum MovementType {
+  RECEIPT
+  ISSUE
+  USAGE
+  RETURN
+}
+
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @map("full_name")
+  position     String   @default("")
+  phone        String   @default("")
+  role         Role
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  movements StockMovement[]
+  sessions  Session[]
+
+  @@map("users")
+}
+
+model Project {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  address   String   @default("")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  foremen   Foreman[]
+  movements StockMovement[]
+
+  @@map("projects")
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  contact   String   @default("")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  movements StockMovement[]
+
+  @@map("suppliers")
+}
+
+model Foreman {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String   @default("")
+  brigade   String   @default("")
+  projectId String?  @map("project_id")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project   Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  stock     ForemanStock[]
+  movements StockMovement[]
+
+  @@index([projectId])
+  @@map("foremen")
+}
+
+model Material {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  category  String
+  unit      String
+  /// Остаток на складе. Меняется только вместе с записью движения.
+  quantity  Float    @default(0)
+  minStock  Float    @default(0) @map("min_stock")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  foremanStock ForemanStock[]
+  movements    StockMovement[]
+
+  @@map("materials")
+}
+
+/// Остаток материала на руках у конкретного бригадира.
+model ForemanStock {
+  foremanId  String   @map("foreman_id")
+  materialId String   @map("material_id")
+  quantity   Float    @default(0)
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  foreman  Foreman  @relation(fields: [foremanId], references: [id], onDelete: Cascade)
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@id([foremanId, materialId])
+  @@index([materialId])
+  @@map("foreman_stock")
+}
+
+/// Журнал движений. Записи никогда не изменяются и не удаляются.
+model StockMovement {
+  id  String @id @default(uuid())
+  /// Порядок записи операций: у нескольких операций одного дня может
+  /// совпадать время, и без seq история показывалась бы вразнобой.
+  seq BigInt @default(autoincrement())
+
+  type       MovementType
+  materialId String       @map("material_id")
+  quantity   Float
+  occurredAt DateTime     @map("occurred_at")
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  userId     String  @map("user_id")
+  foremanId  String? @map("foreman_id")
+  supplierId String? @map("supplier_id")
+  projectId  String? @map("project_id")
+
+  vehicleNumber String @default("") @map("vehicle_number")
+  reason        String @default("")
+  comment       String @default("")
+
+  /// Как операция изменила остаток склада: +q, -q или 0.
+  warehouseDelta Float  @map("warehouse_delta")
+  /// Как операция изменила остаток у бригадира.
+  foremanDelta   Float  @map("foreman_delta")
+  /// Остаток склада сразу после операции — «фотография» на момент записи.
+  warehouseAfter Float  @map("warehouse_after")
+  foremanAfter   Float? @map("foreman_after")
+
+  material Material  @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  foreman  Foreman?  @relation(fields: [foremanId], references: [id], onDelete: Restrict)
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  project  Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([occurredAt(sort: Desc), seq(sort: Desc)])
+  @@index([materialId, occurredAt(sort: Desc)])
+  @@index([foremanId, occurredAt(sort: Desc)])
+  @@index([type, occurredAt(sort: Desc)])
+  @@index([projectId, occurredAt(sort: Desc)])
+  @@index([userId, occurredAt(sort: Desc)])
+  @@map("stock_movements")
+}
+
+model Session {
+  id        String   @id
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Setting {
+  key   String @id
+  value String
+
+  @@map("settings")
+}

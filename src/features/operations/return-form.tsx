@@ -8,8 +8,8 @@ import type { z } from "zod";
 import { createReturn } from "@/app/actions/movements";
 import { returnSchema } from "@/lib/validation";
 import { formatQuantity } from "@/lib/format";
-import { useI18n } from "@/i18n/client";
-import { translateValue } from "@/i18n";
+import { useIntlTag, useT } from "@/i18n/client";
+import { useValueTranslator } from "@/i18n/values";
 import { RETURN_REASONS } from "@/constants/categories";
 import { FormField } from "@/shared/components/form-field";
 import { Input } from "@/components/ui/input";
@@ -24,8 +24,11 @@ type Values = z.input<typeof returnSchema>;
 
 /** Возврат неизрасходованного материала от бригадира обратно на склад. */
 export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSuccess: () => void }) {
-  const { t, locale } = useI18n();
-  const unitOf = (unit: string) => translateValue(t.units, unit);
+  const t = useT();
+  const unitLabel = useValueTranslator("units");
+  const reasonLabel = useValueTranslator("returnReasons");
+  const locale = useIntlTag();
+  const unitOf = (unit: string) => unitLabel(unit);
   const {
     register,
     handleSubmit,
@@ -62,12 +65,10 @@ export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSucc
   const { submit, isPending } = useActionSubmit<Values>({
     action: createReturn,
     setError,
-    successTitle: t.operations.return.success,
+    successTitle: t("operations.return.success"),
     successDescription: (values) =>
       position
-        ? t.operations.return.successHint(
-            formatQuantity(Number(values.quantity), unitOf(position.unit), locale)
-          )
+        ? t("operations.return.successHint", { qty: formatQuantity(Number(values.quantity), unitOf(position.unit), locale) })
         : undefined,
     onSuccess,
   });
@@ -77,8 +78,8 @@ export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSucc
       <SelectField
         control={control}
         name="foremanId"
-        label={t.operations.foreman}
-        placeholder={t.operations.return.foremanPlaceholder}
+        label={t("operations.foreman")}
+        placeholder={t("operations.return.foremanPlaceholder")}
         required
         error={errors.foremanId?.message}
         disabled={isPending}
@@ -88,12 +89,12 @@ export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSucc
       <SelectField
         control={control}
         name="materialId"
-        label={t.operations.material}
-        placeholder={foremanId ? t.operations.return.materialPlaceholder : t.operations.selectForemanFirst}
+        label={t("operations.material")}
+        placeholder={foremanId ? t("operations.return.materialPlaceholder") : t("operations.selectForemanFirst")}
         required
         error={errors.materialId?.message}
         disabled={isPending || !foremanId}
-        emptyMessage={t.operations.noStockForeman}
+        emptyMessage={t("operations.noStockForeman")}
         options={held.map((row) => ({
           value: row.materialId,
           label: row.materialName,
@@ -101,15 +102,15 @@ export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSucc
         }))}
       >
         {position && (
-          <AvailableHint available={position.quantity} unit={position.unit} label={t.operations.atForemanHand} />
+          <AvailableHint available={position.quantity} unit={position.unit} label={t("operations.atForemanHand")} />
         )}
       </SelectField>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField
-          label={t.operations.quantity}
+          label={t("operations.quantity")}
           required
-          error={errors.quantity?.message ?? (exceedsHeld ? t.operations.exceedsForeman : undefined)}
+          error={errors.quantity?.message ?? (exceedsHeld ? t("operations.exceedsForeman") : undefined)}
         >
           <QuantityInput
             unit={position ? unitOf(position.unit) : undefined}
@@ -120,7 +121,7 @@ export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSucc
           />
         </FormField>
 
-        <FormField label={t.operations.return.date} required error={errors.occurredAt?.message}>
+        <FormField label={t("operations.return.date")} required error={errors.occurredAt?.message}>
           <Input type="date" max={todayISODate()} disabled={isPending} {...register("occurredAt")} />
         </FormField>
       </div>
@@ -128,20 +129,20 @@ export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSucc
       <SelectField
         control={control}
         name="reason"
-        label={t.operations.reason}
-        placeholder={t.operations.return.reasonPlaceholder}
+        label={t("operations.reason")}
+        placeholder={t("operations.return.reasonPlaceholder")}
         error={errors.reason?.message}
         disabled={isPending}
-        options={RETURN_REASONS.map((reason) => ({ value: reason, label: translateValue(t.returnReasons, reason) }))}
+        options={RETURN_REASONS.map((reason) => ({ value: reason, label: reasonLabel(reason) }))}
       />
 
-      <FormField label={t.operations.comment} error={errors.comment?.message}>
-        <Textarea placeholder={t.common.optional} rows={2} disabled={isPending} {...register("comment")} />
+      <FormField label={t("operations.comment")} error={errors.comment?.message}>
+        <Textarea placeholder={t("common.optional")} rows={2} disabled={isPending} {...register("comment")} />
       </FormField>
 
       <DialogFooter>
         <Button type="submit" disabled={isPending || exceedsHeld}>
-          {isPending ? t.common.saving : t.operations.return.submit}
+          {isPending ? t("common.saving") : t("operations.return.submit")}
         </Button>
       </DialogFooter>
     </form>

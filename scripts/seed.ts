@@ -4,16 +4,13 @@
  *   npm run db:seed -- --reset — стереть всё и заполнить заново
  */
 import { seedDatabase, isDatabaseSeeded, describeDatabase } from "@/lib/db/seed";
-import { getPool } from "@/lib/db/client";
-import { SCHEMA_SQL } from "@/lib/db/schema";
+import { getPrisma } from "@/lib/db/client";
 import { verifyLedgerConsistency } from "@/server/movements";
 import { USERS_SEED } from "@/lib/db/seed-people";
 
 const reset = process.argv.includes("--reset");
 
-// Схема должна существовать до заполнения — на новой базе её ещё нет.
-await getPool().query(SCHEMA_SQL);
-
+// Схему создаёт `npm run db:migrate` (prisma migrate) — здесь только данные.
 if (!reset && (await isDatabaseSeeded())) {
   console.log("База уже заполнена. Используйте --reset, чтобы пересоздать данные.");
   console.table(await describeDatabase());
@@ -34,7 +31,7 @@ console.log(
 );
 if (!consistency.ok) {
   console.log(consistency.materialMismatches.slice(0, 5));
-  await getPool().end();
+  await getPrisma().$disconnect();
   process.exit(1);
 }
 
@@ -43,4 +40,4 @@ for (const user of USERS_SEED) {
   console.log(`  ${user.username.padEnd(10)} / ${user.password.padEnd(10)} — ${user.fullName} (${user.role})`);
 }
 
-await getPool().end();
+await getPrisma().$disconnect();

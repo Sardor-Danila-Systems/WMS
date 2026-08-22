@@ -4,9 +4,8 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MOVEMENT_COLORS } from "@/constants/colors";
-import { useI18n } from "@/i18n/client";
+import { useIntlTag, useT } from "@/i18n/client";
 import { formatLongDate } from "@/lib/format";
-import type { Locale } from "@/i18n/types";
 import type { DailyActivity } from "@/server/queries";
 
 const SERIES = [
@@ -30,14 +29,14 @@ function ActivityTooltip({
   active?: boolean;
   payload?: { name: string; value: number; color: string }[];
   label?: string;
-  locale: Locale;
+  locale: string;
 }) {
   if (!active || !payload?.length) return null;
   const total = payload.reduce((sum, entry) => sum + entry.value, 0);
   if (total === 0) return null;
 
   return (
-    <div className="rounded-md border border-border bg-popover px-3 py-2 text-xs shadow-sm">
+    <div className="rounded-md border border-border bg-popover px-3 py-2 text-[13px] shadow-sm">
       <div className="mb-1.5 font-medium text-popover-foreground">
         {label ? formatLongDate(label, locale) : ""}
       </div>
@@ -59,19 +58,20 @@ function ActivityTooltip({
 }
 
 export function ActivityChart({ data }: { data: DailyActivity[] }) {
-  const { t, locale } = useI18n();
+  const t = useT();
+  const locale = useIntlTag();
   return (
     <Card>
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-        <CardTitle className="text-[13px] font-semibold">{t.dashboard.chartTitle}</CardTitle>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <CardTitle className="text-[14.5px] font-semibold">{t("dashboard.chartTitle")}</CardTitle>
+        <div className="flex flex-wrap items-center gap-3 text-[13px] text-muted-foreground">
           {SERIES.map((series) => (
             <span key={series.key} className="flex items-center gap-1.5">
               <span
                 className="h-2 w-2 rounded-full"
                 style={{ backgroundColor: MOVEMENT_COLORS[series.type].color }}
               />
-              {t.movements[series.type]}
+              {t(`movements.${series.type}`)}
             </span>
           ))}
         </div>
@@ -102,7 +102,7 @@ export function ActivityChart({ data }: { data: DailyActivity[] }) {
                 <Bar
                   key={series.key}
                   dataKey={series.key}
-                  name={t.movements[series.type]}
+                  name={t(`movements.${series.type}`)}
                   fill={MOVEMENT_COLORS[series.type].color}
                   radius={[3, 3, 0, 0]}
                   maxBarSize={12}

@@ -5,7 +5,7 @@ import type { Control, FieldValues, Path } from "react-hook-form";
 import { Controller } from "react-hook-form";
 
 import { FormField } from "@/shared/components/form-field";
-import { useI18n } from "@/i18n/client";
+import { useIntlTag, useT } from "@/i18n/client";
 import { formatNumber } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import {
@@ -50,8 +50,8 @@ export function SelectField<T extends FieldValues>({
   emptyMessage?: string;
   children?: ReactNode;
 }) {
-  const { t } = useI18n();
-  const noOptions = emptyMessage ?? t.operations.noOptions;
+  const t = useT();
+  const noOptions = emptyMessage ?? t("operations.noOptions");
 
   // Base UI показывает в поле «сырое» значение, если не передать карту
   // «значение → подпись». Без неё в поле выводился бы идентификатор материала.
@@ -78,7 +78,7 @@ export function SelectField<T extends FieldValues>({
                   <span className="flex w-full items-center justify-between gap-3">
                     <span className="truncate">{option.label}</span>
                     {option.hint && (
-                      <span className="shrink-0 text-xs text-muted-foreground">{option.hint}</span>
+                      <span className="shrink-0 text-[13px] text-muted-foreground">{option.hint}</span>
                     )}
                   </span>
                 </SelectItem>
@@ -113,7 +113,7 @@ export function QuantityInput({
         {...props}
       />
       {unit && (
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-medium text-muted-foreground">
           {unit}
         </span>
       )}
@@ -131,10 +131,10 @@ export function AvailableHint({
   unit: string;
   label: string;
 }) {
-  const { locale } = useI18n();
+  const locale = useIntlTag();
   const isEmpty = available <= 0;
   return (
-    <p className={isEmpty ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+    <p className={isEmpty ? "text-[13px] text-destructive" : "text-[13px] text-muted-foreground"}>
       {label}:{" "}
       <span className="font-medium tabular-nums">
         {formatNumber(available, locale)} {unit}

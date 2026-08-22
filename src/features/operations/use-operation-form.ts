@@ -55,7 +55,7 @@ export function useActionSubmit<TValues extends FieldValues>(options: {
       options.onSuccess?.();
       return true;
     } catch {
-      toast.error(t.common.serverUnavailable);
+      toast.error(t("common.serverUnavailable"));
       return false;
     } finally {
       setIsPending(false);

@@ -5,8 +5,7 @@
  *
  *   npm run test:e2e
  */
-const { getPool, queryOne } = await import("@/lib/db/client");
-const { SCHEMA_SQL } = await import("@/lib/db/schema");
+const { db, getPrisma } = await import("@/lib/db/client");
 const { seedDatabase } = await import("@/lib/db/seed");
 const { recordMovement, verifyLedgerConsistency } = await import("@/server/movements");
 const { createMaterial, createForeman, deleteMaterial, updateMaterial } = await import("@/server/catalog");
@@ -14,9 +13,8 @@ const { getMaterial, getForemanStock, listMovements } = await import("@/server/q
 const { BusinessError } = await import("@/server/errors");
 const { hashPassword, verifyPassword } = await import("@/lib/auth/password");
 
-// Тест работает на той же базе, но полностью пересоздаёт данные,
-// поэтому запускать его следует на тестовой базе (см. .env.local).
-await getPool().query(SCHEMA_SQL);
+// Тест полностью пересоздаёт данные, поэтому запускать его следует
+// на отдельной базе: укажите её в DATABASE_URL перед запуском.
 
 let passed = 0;
 let failed = 0;
@@ -51,7 +49,7 @@ async function checkThrows(label: string, fn: () => unknown) {
 console.log("\nПодготовка: справочники без истории операций");
 await seedDatabase({ reset: true, skipHistory: true });
 
-const admin = (await queryOne<{ id: string }>("SELECT id FROM users WHERE username = 'admin'"))!;
+const admin = (await db.user.findUniqueOrThrow({ where: { username: "admin" }, select: { id: true } }))!;
 
 /**
  * Метки времени операций разносим на минуты вперёд от текущего момента:
@@ -190,14 +188,14 @@ check("пароль не хранится в открытом виде", hash.in
 const consistency = await verifyLedgerConsistency();
 check("остатки сходятся с журналом движений", consistency.ok, true);
 
-const negativeStock = (await queryOne<{ c: number }>("SELECT COUNT(*)::int AS c FROM materials WHERE quantity < 0"))!;
+const negativeStock = { c: await db.material.count({ where: { quantity: { lt: 0 } } }) };
 check("нет отрицательных остатков склада", negativeStock.c, 0);
-const negativeForeman = (await queryOne<{ c: number }>("SELECT COUNT(*)::int AS c FROM foreman_stock WHERE quantity < 0"))!;
+const negativeForeman = { c: await db.foremanStock.count({ where: { quantity: { lt: 0 } } }) };
 check("нет отрицательных остатков у бригадиров", negativeForeman.c, 0);
 
 /* ================================================================== */
 console.log(`\n${failed === 0 ? "✓" : "✗"} Пройдено ${passed}, провалено ${failed}`);
-await getPool().end();
+await getPrisma().$disconnect();
 process.exit(failed === 0 ? 0 : 1);
 
 export {};

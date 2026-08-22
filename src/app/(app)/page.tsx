@@ -11,9 +11,8 @@ import { OperationDialog } from "@/features/operations/operation-dialog";
 import { getDashboardData, type PeriodTotals } from "@/server/queries";
 import { getOperationRefData } from "@/server/ref-data";
 import { getStockStatus, MOVEMENT_COLORS, MOVEMENT_TYPES } from "@/constants/colors";
-import { getDictionary, getLocale } from "@/i18n/server";
-import { translateValue } from "@/i18n";
-import { declOf, formatDate, formatQuantity } from "@/lib/format";
+import { getIntlTag, getT, getValueTranslator } from "@/i18n/server";
+import { formatDate, formatQuantity } from "@/lib/format";
 import type { MovementType } from "@/types";
 
 /** Порядок соответствует движению материала: пришло → выдали → израсходовали → вернули. */
@@ -26,23 +25,24 @@ const TODAY_COUNT: Record<MovementType, (t: PeriodTotals) => number> = {
 
 export default async function DashboardPage() {
   const [t, locale, data, refData] = await Promise.all([
-    getDictionary(),
-    getLocale(),
+    getT(),
+    getIntlTag(),
     getDashboardData(),
     getOperationRefData(),
   ]);
+  const unitLabel = await getValueTranslator("units");
 
   const todayTotal =
     data.today.receiptCount + data.today.issueCount + data.today.usageCount + data.today.returnCount;
   const weekTotal =
     data.week.receiptCount + data.week.issueCount + data.week.usageCount + data.week.returnCount;
-  const unitOf = (unit: string) => translateValue(t.units, unit);
+  const unitOf = (unit: string) => unitLabel(unit);
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title={t.dashboard.title}
-        description={t.dashboard.subtitle}
+        title={t("dashboard.title")}
+        description={t("dashboard.subtitle")}
         actions={
           <>
             <OperationDialog type="RECEIPT" data={refData} variant="outline" />
@@ -56,40 +56,31 @@ export default async function DashboardPage() {
           показываются в позициях и операциях. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
-          label={t.dashboard.materialsCount}
+          label={t("dashboard.materialsCount")}
           value={String(data.materialsCount)}
           icon={Package}
-          hint={t.dashboard.materialsHint}
+          hint={t("dashboard.materialsHint")}
           tone="accent"
         />
         <StatCard
-          label={t.dashboard.lowStock}
+          label={t("dashboard.lowStock")}
           value={String(data.lowStockMaterials.length)}
           icon={AlertTriangle}
-          hint={data.lowStockMaterials.length > 0 ? t.dashboard.lowStockHint : t.dashboard.lowStockOk}
+          hint={data.lowStockMaterials.length > 0 ? t("dashboard.lowStockHint") : t("dashboard.lowStockOk")}
           tone={data.lowStockMaterials.length > 0 ? "danger" : "neutral"}
         />
         <StatCard
-          label={t.dashboard.atForemen}
-          value={`${data.foremanPositions} ${declOf(
-            data.foremanPositions,
-            t.dashboard.positionWord.one,
-            t.dashboard.positionWord.few,
-            t.dashboard.positionWord.many
-          )}`}
+          label={t("dashboard.atForemen")}
+          value={t("dashboard.positions", { count: data.foremanPositions })}
           icon={HardHat}
-          hint={t.dashboard.atForemenHint(
-            data.foremenWithStock,
-            data.foremenCount,
-            data.projectsCount
-          )}
+          hint={t("dashboard.atForemenHint", { withStock: data.foremenWithStock, total: data.foremenCount, projects: data.projectsCount })}
           tone="warning"
         />
         <StatCard
-          label={t.dashboard.todayOps}
+          label={t("dashboard.todayOps")}
           value={String(todayTotal)}
           icon={TruckIcon}
-          hint={t.dashboard.weekOps(weekTotal)}
+          hint={t("dashboard.weekOps", { n: weekTotal })}
           tone="neutral"
         />
       </div>
@@ -97,16 +88,16 @@ export default async function DashboardPage() {
       {/* Движение за сегодня — одной компактной строкой вместо четырёх карточек. */}
       <div className="rounded-lg border border-border bg-card px-4 py-3">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <span className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
-            {t.dashboard.todayMovement}
+          <span className="text-[12.5px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+            {t("dashboard.todayMovement")}
           </span>
           {MOVEMENT_TYPES.map((type) => (
-            <span key={type} className="flex items-center gap-1.5 text-[13px]">
+            <span key={type} className="flex items-center gap-1.5 text-[14.5px]">
               <span
                 className="h-1.5 w-1.5 rounded-full"
                 style={{ backgroundColor: MOVEMENT_COLORS[type].color }}
               />
-              <span className="text-muted-foreground">{t.movements[type]}</span>
+              <span className="text-muted-foreground">{t(`movements.${type}`)}</span>
               <span className="font-semibold tabular-nums">{TODAY_COUNT[type](data.today)}</span>
             </span>
           ))}
@@ -118,17 +109,17 @@ export default async function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-[13px] font-semibold">{t.dashboard.lowStockCard}</CardTitle>
+            <CardTitle className="text-[14.5px] font-semibold">{t("dashboard.lowStockCard")}</CardTitle>
             <Link
               href="/materials?filter=low-stock"
-              className="text-xs text-primary transition-colors hover:underline"
+              className="text-[13px] text-primary transition-colors hover:underline"
             >
-              {t.dashboard.allMaterials}
+              {t("dashboard.allMaterials")}
             </Link>
           </CardHeader>
           <CardContent className="space-y-0.5">
             {data.lowStockMaterials.length === 0 && (
-              <EmptyState message={t.dashboard.allGood} description={t.dashboard.allGoodHint} />
+              <EmptyState message={t("dashboard.allGood")} description={t("dashboard.allGoodHint")} />
             )}
             {data.lowStockMaterials.slice(0, 6).map((material) => (
               <Link
@@ -137,10 +128,10 @@ export default async function DashboardPage() {
                 className="flex items-center justify-between gap-3 rounded-md px-2 py-2 transition-colors hover:bg-muted/60"
               >
                 <div className="min-w-0">
-                  <div className="truncate text-[13px] font-medium">{material.name}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="truncate text-[14.5px] font-medium">{material.name}</div>
+                  <div className="text-[13px] text-muted-foreground">
                     {formatQuantity(material.quantity, unitOf(material.unit), locale)} ·{" "}
-                    {t.dashboard.minimum}{" "}
+                    {t("dashboard.minimum")}{" "}
                     {formatQuantity(material.minStock, unitOf(material.unit), locale)}
                   </div>
                 </div>
@@ -155,16 +146,16 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-[13px] font-semibold">{t.dashboard.recentOps}</CardTitle>
-            <Link href="/history" className="text-xs text-primary transition-colors hover:underline">
-              {t.dashboard.fullHistory}
+            <CardTitle className="text-[14.5px] font-semibold">{t("dashboard.recentOps")}</CardTitle>
+            <Link href="/history" className="text-[13px] text-primary transition-colors hover:underline">
+              {t("dashboard.fullHistory")}
             </Link>
           </CardHeader>
           <CardContent className="space-y-0.5">
             {data.recentMovements.length === 0 && (
               <EmptyState
-                message={t.dashboard.noRecentOps}
-                description={t.dashboard.noRecentOpsHint}
+                message={t("dashboard.noRecentOps")}
+                description={t("dashboard.noRecentOpsHint")}
               />
             )}
             {data.recentMovements.map((movement) => (
@@ -174,17 +165,17 @@ export default async function DashboardPage() {
               >
                 <MovementTypeBadge type={movement.type} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-medium">{movement.materialName}</div>
+                  <div className="truncate text-[14.5px] font-medium">{movement.materialName}</div>
                   {/* Подписываем контрагента: иначе непонятно, чьё это имя —
                       бригадира, поставщика или сотрудника склада. */}
-                  <div className="truncate text-xs text-muted-foreground">
+                  <div className="truncate text-[13px] text-muted-foreground">
                     {formatQuantity(movement.quantity, unitOf(movement.unit), locale)}
-                    {movement.supplierName && ` · ${t.dashboard.fromSupplier(movement.supplierName)}`}
-                    {movement.foremanName && ` · ${t.dashboard.foremanLabel(movement.foremanName)}`}
+                    {movement.supplierName && ` · ${t("dashboard.fromSupplier", { name: movement.supplierName })}`}
+                    {movement.foremanName && ` · ${t("dashboard.foremanLabel", { name: movement.foremanName })}`}
                     {movement.projectName && ` · ${movement.projectName}`}
                   </div>
                 </div>
-                <div className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                <div className="shrink-0 whitespace-nowrap text-[13px] text-muted-foreground">
                   {formatDate(movement.occurredAt, locale)}
                 </div>
               </div>

@@ -1,13 +1,13 @@
 import { PageHeader } from "@/shared/components/page-header";
 import { MovementsTable } from "@/features/operations/movements-table";
 import { OperationDialog } from "@/features/operations/operation-dialog";
-import { getDictionary } from "@/i18n/server";
+import { getT } from "@/i18n/server";
 import { listMovements } from "@/server/queries";
 import { getOperationRefData } from "@/server/ref-data";
 
 export default async function Page() {
   const [t, movements, refData] = await Promise.all([
-    getDictionary(),
+    getT(),
     listMovements({ type: "RECEIPT" }),
     getOperationRefData(),
   ]);
@@ -15,14 +15,14 @@ export default async function Page() {
   return (
     <div>
       <PageHeader
-        title={t.operations.receipt.title}
-        description={t.operations.receipt.subtitle}
+        title={t("operations.receipt.title")}
+        description={t("operations.receipt.subtitle")}
         actions={<OperationDialog type="RECEIPT" data={refData} />}
       />
       <MovementsTable
         movements={movements}
         columns={["date", "material", "quantity", "stockAfter", "supplier", "vehicle", "acceptedBy", "comment"]}
-        emptyMessage={t.operations.receipt.empty}
+        emptyMessage={t("operations.receipt.empty")}
         exportName="postuplenia"
       />
     </div>

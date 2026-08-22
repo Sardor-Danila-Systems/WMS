@@ -1,6 +1,7 @@
 import "@/lib/server-only";
 
-import { queryAll, queryOne, type SqlParam } from "@/lib/db/client";
+import { Prisma } from "@/generated/prisma/client";
+import { db } from "@/lib/db/client";
 import { getStockStatus } from "@/constants/colors";
 import type {
   Foreman,
@@ -13,34 +14,34 @@ import type {
   User,
 } from "@/types";
 
+/**
+ * Простые выборки идут через модели Prisma, сводные отчёты — через $queryRaw:
+ * агрегаты вида «сумма по типу операции в разрезе материала» в SQL выражаются
+ * одним запросом, а через конструктор запросов превратились бы в несколько
+ * обращений к базе и склейку в памяти.
+ */
+
+const iso = (date: Date): string => date.toISOString();
+
 /* ------------------------------------------------------------------ */
 /* Материалы                                                           */
 /* ------------------------------------------------------------------ */
 
-const MATERIAL_SELECT = `
-  SELECT m.id, m.name, m.category, m.unit, m.quantity, m.min_stock, m.is_active,
-         m.created_at, m.updated_at,
-         (SELECT MAX(occurred_at) FROM stock_movements
-           WHERE material_id = m.id AND type = 'RECEIPT') AS last_receipt,
-         COALESCE((SELECT SUM(quantity) FROM foreman_stock WHERE material_id = m.id), 0) AS at_foremen
-    FROM materials m
-`;
-
-interface MaterialRow {
+interface MaterialAggregateRow {
   id: string;
   name: string;
   category: string;
   unit: string;
   quantity: number;
   min_stock: number;
-  is_active: number;
-  created_at: string;
-  updated_at: string;
-  last_receipt: string | null;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+  last_receipt: Date | null;
   at_foremen: number;
 }
 
-function mapMaterial(row: MaterialRow): Material {
+function mapMaterial(row: MaterialAggregateRow): Material {
   return {
     id: row.id,
     name: row.name,
@@ -48,110 +49,83 @@ function mapMaterial(row: MaterialRow): Material {
     unit: row.unit,
     quantity: row.quantity,
     minStock: row.min_stock,
-    isActive: row.is_active === 1,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    lastReceiptDate: row.last_receipt,
+    isActive: row.is_active,
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at),
+    lastReceiptDate: row.last_receipt ? iso(row.last_receipt) : null,
     atForemen: row.at_foremen,
   };
 }
 
 export async function listMaterials(options?: { includeArchived?: boolean }): Promise<Material[]> {
-  const where = options?.includeArchived ? "" : "WHERE m.is_active = 1";
-  return (await queryAll<MaterialRow>(`${MATERIAL_SELECT} ${where} ORDER BY lower(m.name)`)).map(mapMaterial);
+  const rows = await db.$queryRaw<MaterialAggregateRow[]>`
+    SELECT m.*,
+           (SELECT MAX(occurred_at) FROM stock_movements
+             WHERE material_id = m.id AND type = 'RECEIPT') AS last_receipt,
+           COALESCE((SELECT SUM(quantity) FROM foreman_stock WHERE material_id = m.id), 0) AS at_foremen
+      FROM materials m
+     WHERE ${options?.includeArchived ? Prisma.sql`TRUE` : Prisma.sql`m.is_active = TRUE`}
+     ORDER BY lower(m.name)
+  `;
+  return rows.map(mapMaterial);
 }
 
 export async function getMaterial(id: string): Promise<Material | null> {
-  const row = await queryOne<MaterialRow>(`${MATERIAL_SELECT} WHERE m.id = ?`, id);
-  return row ? mapMaterial(row) : null;
+  const rows = await db.$queryRaw<MaterialAggregateRow[]>`
+    SELECT m.*,
+           (SELECT MAX(occurred_at) FROM stock_movements
+             WHERE material_id = m.id AND type = 'RECEIPT') AS last_receipt,
+           COALESCE((SELECT SUM(quantity) FROM foreman_stock WHERE material_id = m.id), 0) AS at_foremen
+      FROM materials m
+     WHERE m.id = ${id}
+  `;
+  return rows[0] ? mapMaterial(rows[0]) : null;
 }
 
 /** Сколько раз материал встречается в журнале — материал с историей удалять нельзя. */
-export async function countMaterialMovements(materialId: string): Promise<number> {
-  const row = await queryOne<{ c: number }>(
-    "SELECT COUNT(*)::int AS c FROM stock_movements WHERE material_id = ?",
-    materialId
-  );
-  return row?.c ?? 0;
+export function countMaterialMovements(materialId: string): Promise<number> {
+  return db.stockMovement.count({ where: { materialId } });
 }
 
 /* ------------------------------------------------------------------ */
 /* Движения                                                            */
 /* ------------------------------------------------------------------ */
 
-/**
- * Журнал только пополняется, поэтому `seq` — это порядок записи операций.
- * Он используется вторым ключом сортировки: несколько операций одного дня
- * могут иметь одинаковое время, и без него история показывалась бы вразнобой.
- */
-const MOVEMENT_SELECT = `
-  SELECT sm.id, sm.type, sm.occurred_at, sm.created_at, sm.quantity,
-         sm.material_id, m.name AS material_name, m.unit,
-         sm.user_id, u.full_name AS user_name,
-         sm.foreman_id, f.name AS foreman_name,
-         sm.supplier_id, s.name AS supplier_name,
-         sm.project_id, p.name AS project_name,
-         sm.vehicle_number, sm.reason, sm.comment,
-         sm.warehouse_delta, sm.foreman_delta, sm.warehouse_after, sm.foreman_after
-    FROM stock_movements sm
-    JOIN materials m  ON m.id = sm.material_id
-    JOIN users     u  ON u.id = sm.user_id
-    LEFT JOIN foremen   f ON f.id = sm.foreman_id
-    LEFT JOIN suppliers s ON s.id = sm.supplier_id
-    LEFT JOIN projects  p ON p.id = sm.project_id
-`;
+const MOVEMENT_INCLUDE = {
+  material: { select: { name: true, unit: true } },
+  user: { select: { fullName: true } },
+  foreman: { select: { name: true } },
+  supplier: { select: { name: true } },
+  project: { select: { name: true } },
+} satisfies Prisma.StockMovementInclude;
 
-interface MovementRow {
-  id: string;
-  type: MovementType;
-  occurred_at: string;
-  created_at: string;
-  quantity: number;
-  material_id: string;
-  material_name: string;
-  unit: string;
-  user_id: string;
-  user_name: string;
-  foreman_id: string | null;
-  foreman_name: string | null;
-  supplier_id: string | null;
-  supplier_name: string | null;
-  project_id: string | null;
-  project_name: string | null;
-  vehicle_number: string;
-  reason: string;
-  comment: string;
-  warehouse_delta: number;
-  foreman_delta: number;
-  warehouse_after: number;
-  foreman_after: number | null;
-}
+type MovementWithRelations = Prisma.StockMovementGetPayload<{ include: typeof MOVEMENT_INCLUDE }>;
 
-function mapMovement(row: MovementRow): StockMovement {
+function mapMovement(row: MovementWithRelations): StockMovement {
   return {
     id: row.id,
     type: row.type,
-    occurredAt: row.occurred_at,
-    createdAt: row.created_at,
-    materialId: row.material_id,
-    materialName: row.material_name,
-    unit: row.unit,
+    occurredAt: iso(row.occurredAt),
+    createdAt: iso(row.createdAt),
+    materialId: row.materialId,
+    materialName: row.material.name,
+    unit: row.material.unit,
     quantity: row.quantity,
-    userId: row.user_id,
-    userName: row.user_name,
-    foremanId: row.foreman_id,
-    foremanName: row.foreman_name,
-    supplierId: row.supplier_id,
-    supplierName: row.supplier_name,
-    projectId: row.project_id,
-    projectName: row.project_name,
-    vehicleNumber: row.vehicle_number,
+    userId: row.userId,
+    userName: row.user.fullName,
+    foremanId: row.foremanId,
+    foremanName: row.foreman?.name ?? null,
+    supplierId: row.supplierId,
+    supplierName: row.supplier?.name ?? null,
+    projectId: row.projectId,
+    projectName: row.project?.name ?? null,
+    vehicleNumber: row.vehicleNumber,
     reason: row.reason,
     comment: row.comment,
-    warehouseDelta: row.warehouse_delta,
-    foremanDelta: row.foreman_delta,
-    warehouseAfter: row.warehouse_after,
-    foremanAfter: row.foreman_after,
+    warehouseDelta: row.warehouseDelta,
+    foremanDelta: row.foremanDelta,
+    warehouseAfter: row.warehouseAfter,
+    foremanAfter: row.foremanAfter,
   };
 }
 
@@ -171,123 +145,99 @@ export interface MovementFilters {
 }
 
 export async function listMovements(filters: MovementFilters = {}): Promise<StockMovement[]> {
-  const clauses: string[] = [];
-  const params: (string | number)[] = [];
+  const pick = (value?: string) => (value && value !== "all" ? value : undefined);
 
-  if (filters.type && filters.type !== "all") {
-    clauses.push("sm.type = ?");
-    params.push(filters.type);
-  }
-  if (filters.materialId && filters.materialId !== "all") {
-    clauses.push("sm.material_id = ?");
-    params.push(filters.materialId);
-  }
-  if (filters.foremanId && filters.foremanId !== "all") {
-    clauses.push("sm.foreman_id = ?");
-    params.push(filters.foremanId);
-  }
-  if (filters.userId && filters.userId !== "all") {
-    clauses.push("sm.user_id = ?");
-    params.push(filters.userId);
-  }
-  if (filters.projectId && filters.projectId !== "all") {
-    clauses.push("sm.project_id = ?");
-    params.push(filters.projectId);
-  }
-  if (filters.supplierId && filters.supplierId !== "all") {
-    clauses.push("sm.supplier_id = ?");
-    params.push(filters.supplierId);
-  }
-  if (filters.from) {
-    clauses.push("sm.occurred_at >= ?");
-    params.push(filters.from);
-  }
-  if (filters.to) {
-    clauses.push("sm.occurred_at <= ?");
-    params.push(filters.to);
-  }
+  const where: Prisma.StockMovementWhereInput = {
+    type: filters.type && filters.type !== "all" ? filters.type : undefined,
+    materialId: pick(filters.materialId),
+    foremanId: pick(filters.foremanId),
+    userId: pick(filters.userId),
+    projectId: pick(filters.projectId),
+    supplierId: pick(filters.supplierId),
+    occurredAt:
+      filters.from || filters.to
+        ? { gte: filters.from ? new Date(filters.from) : undefined, lte: filters.to ? new Date(filters.to) : undefined }
+        : undefined,
+  };
+
   if (filters.search?.trim()) {
-    const term = `%${filters.search.trim().toLowerCase()}%`;
-    clauses.push(
-      `(LOWER(m.name) LIKE ? OR LOWER(u.full_name) LIKE ? OR LOWER(COALESCE(f.name, '')) LIKE ?
-        OR LOWER(COALESCE(s.name, '')) LIKE ? OR LOWER(COALESCE(p.name, '')) LIKE ?
-        OR LOWER(sm.comment) LIKE ? OR LOWER(sm.vehicle_number) LIKE ?)`
-    );
-    params.push(term, term, term, term, term, term, term);
+    const term = filters.search.trim();
+    where.OR = [
+      { material: { name: { contains: term, mode: "insensitive" } } },
+      { user: { fullName: { contains: term, mode: "insensitive" } } },
+      { foreman: { name: { contains: term, mode: "insensitive" } } },
+      { supplier: { name: { contains: term, mode: "insensitive" } } },
+      { project: { name: { contains: term, mode: "insensitive" } } },
+      { comment: { contains: term, mode: "insensitive" } },
+      { vehicleNumber: { contains: term, mode: "insensitive" } },
+    ];
   }
 
-  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-  const limit = filters.limit ? `LIMIT ${Number(filters.limit)}` : "";
+  const rows = await db.stockMovement.findMany({
+    where,
+    include: MOVEMENT_INCLUDE,
+    // seq — порядок записи: у нескольких операций одного дня может совпадать
+    // время, и без него история показывалась бы вразнобой.
+    orderBy: [{ occurredAt: "desc" }, { seq: "desc" }],
+    take: filters.limit,
+  });
 
-  return (await queryAll<MovementRow>(
-    `${MOVEMENT_SELECT} ${where} ORDER BY sm.occurred_at DESC, sm.seq DESC ${limit}`,
-    ...params
-  )).map(mapMovement);
+  return rows.map(mapMovement);
 }
 
 /* ------------------------------------------------------------------ */
 /* Бригадиры                                                           */
 /* ------------------------------------------------------------------ */
 
-interface ForemanRow {
-  id: string;
-  name: string;
-  phone: string;
-  brigade: string;
-  project_id: string | null;
-  project_name: string | null;
-  is_active: number;
-  created_at: string;
-}
+type ForemanWithProject = Prisma.ForemanGetPayload<{ include: { project: { select: { name: true } } } }>;
 
-function mapForeman(row: ForemanRow): Foreman {
+function mapForeman(row: ForemanWithProject): Foreman {
   return {
     id: row.id,
     name: row.name,
     phone: row.phone,
     brigade: row.brigade,
-    projectId: row.project_id,
-    projectName: row.project_name,
-    isActive: row.is_active === 1,
-    createdAt: row.created_at,
+    projectId: row.projectId,
+    projectName: row.project?.name ?? null,
+    isActive: row.isActive,
+    createdAt: iso(row.createdAt),
   };
 }
 
-const FOREMAN_SELECT = `
-  SELECT f.id, f.name, f.phone, f.brigade, f.project_id, p.name AS project_name,
-         f.is_active, f.created_at
-    FROM foremen f
-    LEFT JOIN projects p ON p.id = f.project_id
-`;
-
 export async function listForemen(options?: { includeInactive?: boolean }): Promise<Foreman[]> {
-  const where = options?.includeInactive ? "" : "WHERE f.is_active = 1";
-  return (await queryAll<ForemanRow>(`${FOREMAN_SELECT} ${where} ORDER BY lower(f.name)`)).map(mapForeman);
+  const rows = await db.foreman.findMany({
+    where: options?.includeInactive ? undefined : { isActive: true },
+    include: { project: { select: { name: true } } },
+    orderBy: { name: "asc" },
+  });
+  return rows.map(mapForeman);
 }
 
 export async function getForeman(id: string): Promise<Foreman | null> {
-  const row = await queryOne<ForemanRow>(`${FOREMAN_SELECT} WHERE f.id = ?`, id);
+  const row = await db.foreman.findUnique({
+    where: { id },
+    include: { project: { select: { name: true } } },
+  });
   return row ? mapForeman(row) : null;
 }
 
 /** Что прямо сейчас находится на руках у бригадира (только ненулевые позиции). */
 export async function getForemanStock(foremanId: string): Promise<ForemanStockRow[]> {
-  return await queryAll<ForemanStockRow>(
-    `SELECT fs.foreman_id AS "foremanId", fs.material_id AS "materialId",
-            m.name AS "materialName", m.unit, fs.quantity, fs.updated_at AS "updatedAt"
-       FROM foreman_stock fs
-       JOIN materials m ON m.id = fs.material_id
-      WHERE fs.foreman_id = ? AND fs.quantity > 0
-      ORDER BY lower(m.name)`,
-    foremanId
-  );
+  const rows = await db.foremanStock.findMany({
+    where: { foremanId, quantity: { gt: 0 } },
+    include: { material: { select: { name: true, unit: true } } },
+    orderBy: { material: { name: "asc" } },
+  });
+  return rows.map((row) => ({
+    foremanId: row.foremanId,
+    materialId: row.materialId,
+    materialName: row.material.name,
+    unit: row.material.unit,
+    quantity: row.quantity,
+    updatedAt: iso(row.updatedAt),
+  }));
 }
 
-/**
- * Сводка по бригадиру считается в количестве операций, а не в сумме количеств:
- * складывать тонны арматуры со штуками кирпича бессмысленно. Сами объёмы
- * показываются по каждому материалу отдельно — см. `getForemanMaterialTotals`.
- */
 export interface ForemanMaterialTotal {
   materialId: string;
   materialName: string;
@@ -303,26 +253,28 @@ export interface ForemanMaterialTotal {
  * и сколько осталось на руках. Каждая строка — один материал со своей
  * единицей измерения, поэтому числа сопоставимы и осмысленны.
  */
-export async function getForemanMaterialTotals(foremanId: string): Promise<ForemanMaterialTotal[]> {
-  return await queryAll<ForemanMaterialTotal>(
-    `SELECT sm.material_id AS "materialId", m.name AS "materialName", m.unit,
-            COALESCE(SUM(CASE WHEN sm.type = 'ISSUE'  THEN sm.quantity END), 0) AS received,
-            COALESCE(SUM(CASE WHEN sm.type = 'USAGE'  THEN sm.quantity END), 0) AS used,
-            COALESCE(SUM(CASE WHEN sm.type = 'RETURN' THEN sm.quantity END), 0) AS returned,
-            COALESCE((SELECT fs.quantity FROM foreman_stock fs
-                       WHERE fs.foreman_id = sm.foreman_id AND fs.material_id = sm.material_id), 0) AS "onHand"
-       FROM stock_movements sm
-       JOIN materials m ON m.id = sm.material_id
-      WHERE sm.foreman_id = ?
-      GROUP BY sm.material_id, sm.foreman_id, m.name, m.unit
-      ORDER BY "onHand" DESC, lower(m.name)`,
-    foremanId
-  );
+export function getForemanMaterialTotals(foremanId: string): Promise<ForemanMaterialTotal[]> {
+  return db.$queryRaw<ForemanMaterialTotal[]>`
+    SELECT sm.material_id AS "materialId", m.name AS "materialName", m.unit,
+           COALESCE(SUM(CASE WHEN sm.type = 'ISSUE'  THEN sm.quantity END), 0) AS received,
+           COALESCE(SUM(CASE WHEN sm.type = 'USAGE'  THEN sm.quantity END), 0) AS used,
+           COALESCE(SUM(CASE WHEN sm.type = 'RETURN' THEN sm.quantity END), 0) AS returned,
+           COALESCE((SELECT fs.quantity FROM foreman_stock fs
+                      WHERE fs.foreman_id = sm.foreman_id AND fs.material_id = sm.material_id), 0) AS "onHand"
+      FROM stock_movements sm
+      JOIN materials m ON m.id = sm.material_id
+     WHERE sm.foreman_id = ${foremanId}
+     GROUP BY sm.material_id, sm.foreman_id, m.name, m.unit
+     ORDER BY "onHand" DESC, lower(m.name)
+  `;
 }
 
+/**
+ * Сводка по бригадиру считается в количестве операций, а не в сумме количеств:
+ * складывать тонны арматуры со штуками кирпича бессмысленно.
+ */
 export interface ForemanSummary {
   foremanId: string;
-  /** Позиций материалов на руках. */
   positions: number;
   issueCount: number;
   usageCount: number;
@@ -330,19 +282,24 @@ export interface ForemanSummary {
   lastOperationAt: string | null;
 }
 
-/** Сводка по всем бригадирам одним запросом — чтобы не делать N+1 в таблице. */
 export async function getForemenSummaries(): Promise<Map<string, ForemanSummary>> {
-  const rows = await queryAll<ForemanSummary>(
-    `SELECT f.id AS "foremanId",
-              (SELECT COUNT(*)::int FROM foreman_stock fs WHERE fs.foreman_id = f.id AND fs.quantity > 0) AS "positions",
-            (SELECT COUNT(*) FROM stock_movements WHERE foreman_id = f.id AND type = 'ISSUE')  AS "issueCount",
-            (SELECT COUNT(*) FROM stock_movements WHERE foreman_id = f.id AND type = 'USAGE')  AS "usageCount",
-            (SELECT COUNT(*)::int FROM stock_movements WHERE foreman_id = f.id AND type = 'RETURN') AS "returnCount",
-            (SELECT MAX(occurred_at) FROM stock_movements WHERE foreman_id = f.id) AS "lastOperationAt"
-       FROM foremen f`
+  const rows = await db.$queryRaw<
+    (Omit<ForemanSummary, "lastOperationAt"> & { lastOperationAt: Date | null })[]
+  >`
+    SELECT f.id AS "foremanId",
+           (SELECT COUNT(*)::int FROM foreman_stock fs WHERE fs.foreman_id = f.id AND fs.quantity > 0) AS positions,
+           (SELECT COUNT(*)::int FROM stock_movements WHERE foreman_id = f.id AND type = 'ISSUE')  AS "issueCount",
+           (SELECT COUNT(*)::int FROM stock_movements WHERE foreman_id = f.id AND type = 'USAGE')  AS "usageCount",
+           (SELECT COUNT(*)::int FROM stock_movements WHERE foreman_id = f.id AND type = 'RETURN') AS "returnCount",
+           (SELECT MAX(occurred_at) FROM stock_movements WHERE foreman_id = f.id) AS "lastOperationAt"
+      FROM foremen f
+  `;
+  return new Map(
+    rows.map((r) => [
+      r.foremanId,
+      { ...r, lastOperationAt: r.lastOperationAt ? iso(r.lastOperationAt) : null },
+    ])
   );
-
-  return new Map(rows.map((r) => [r.foremanId, r]));
 }
 
 /* ------------------------------------------------------------------ */
@@ -350,65 +307,54 @@ export async function getForemenSummaries(): Promise<Map<string, ForemanSummary>
 /* ------------------------------------------------------------------ */
 
 export async function listProjects(options?: { includeInactive?: boolean }): Promise<Project[]> {
-  const where = options?.includeInactive ? "" : "WHERE is_active = 1";
-  return (
-    await queryAll<{ id: string; name: string; address: string; is_active: number; created_at: string }>(
-      `SELECT id, name, address, is_active, created_at FROM projects ${where} ORDER BY lower(name)`
-    )
-  ).map((r) => ({
+  const rows = await db.project.findMany({
+    where: options?.includeInactive ? undefined : { isActive: true },
+    orderBy: { name: "asc" },
+  });
+  return rows.map((r) => ({
     id: r.id,
     name: r.name,
     address: r.address,
-    isActive: r.is_active === 1,
-    createdAt: r.created_at,
+    isActive: r.isActive,
+    createdAt: iso(r.createdAt),
   }));
 }
 
 export async function listSuppliers(options?: { includeInactive?: boolean }): Promise<Supplier[]> {
-  const where = options?.includeInactive ? "" : "WHERE is_active = 1";
-  return (await queryAll<{ id: string; name: string; contact: string; is_active: number; created_at: string }>(
-    `SELECT id, name, contact, is_active, created_at FROM suppliers ${where} ORDER BY lower(name)`
-  )).map((r) => ({
+  const rows = await db.supplier.findMany({
+    where: options?.includeInactive ? undefined : { isActive: true },
+    orderBy: { name: "asc" },
+  });
+  return rows.map((r) => ({
     id: r.id,
     name: r.name,
     contact: r.contact,
-    isActive: r.is_active === 1,
-    createdAt: r.created_at,
+    isActive: r.isActive,
+    createdAt: iso(r.createdAt),
   }));
 }
 
 export async function listUsers(options?: { includeInactive?: boolean }): Promise<User[]> {
-  const where = options?.includeInactive ? "" : "WHERE is_active = 1";
-  return (await queryAll<{
-    id: string;
-    username: string;
-    full_name: string;
-    position: string;
-    phone: string;
-    role: User["role"];
-    is_active: number;
-    created_at: string;
-  }>(
-    `SELECT id, username, full_name, position, phone, role, is_active, created_at
-       FROM users ${where} ORDER BY lower(full_name)`
-  )).map((r) => ({
+  const rows = await db.user.findMany({
+    where: options?.includeInactive ? undefined : { isActive: true },
+    orderBy: { fullName: "asc" },
+  });
+  return rows.map((r) => ({
     id: r.id,
     username: r.username,
-    fullName: r.full_name,
+    fullName: r.fullName,
     position: r.position,
     phone: r.phone,
     role: r.role,
-    isActive: r.is_active === 1,
-    createdAt: r.created_at,
+    isActive: r.isActive,
+    createdAt: iso(r.createdAt),
   }));
 }
 
 /** Сколько операций провёл каждый сотрудник — для таблицы сотрудников. */
 export async function getUserOperationCounts(): Promise<Map<string, number>> {
-  const rows = await queryAll<{ id: string; c: number }>(
-    "SELECT user_id AS id, COUNT(*)::int AS c FROM stock_movements GROUP BY user_id"
-  );
-  return new Map(rows.map((r) => [r.id, r.c]));
+  const rows = await db.stockMovement.groupBy({ by: ["userId"], _count: { _all: true } });
+  return new Map(rows.map((r) => [r.userId, r._count._all]));
 }
 
 /* ------------------------------------------------------------------ */
@@ -427,22 +373,20 @@ export interface PeriodTotals {
 }
 
 export async function getPeriodTotals(fromIso: string): Promise<PeriodTotals> {
-  const row = await queryOne<PeriodTotals>(
-    `SELECT
-       COUNT(*) FILTER (WHERE type = 'RECEIPT')::int AS "receiptCount",
-         COUNT(*) FILTER (WHERE type = 'ISSUE')::int AS "issueCount",
-         COUNT(*) FILTER (WHERE type = 'USAGE')::int AS "usageCount",
-         COUNT(*) FILTER (WHERE type = 'RETURN')::int AS "returnCount",
-         COALESCE(SUM(CASE WHEN type = 'RECEIPT' THEN quantity END), 0) AS "receiptQty",
-         COALESCE(SUM(CASE WHEN type = 'ISSUE'   THEN quantity END), 0) AS "issueQty",
-         COALESCE(SUM(CASE WHEN type = 'USAGE'   THEN quantity END), 0) AS "usageQty",
-         COALESCE(SUM(CASE WHEN type = 'RETURN'  THEN quantity END), 0) AS "returnQty"
-     FROM stock_movements
-    WHERE occurred_at >= ?`,
-    fromIso
-  );
+  const rows = await db.$queryRaw<PeriodTotals[]>`
+    SELECT COUNT(*) FILTER (WHERE type = 'RECEIPT')::int AS "receiptCount",
+           COUNT(*) FILTER (WHERE type = 'ISSUE')::int   AS "issueCount",
+           COUNT(*) FILTER (WHERE type = 'USAGE')::int   AS "usageCount",
+           COUNT(*) FILTER (WHERE type = 'RETURN')::int  AS "returnCount",
+           COALESCE(SUM(quantity) FILTER (WHERE type = 'RECEIPT'), 0) AS "receiptQty",
+           COALESCE(SUM(quantity) FILTER (WHERE type = 'ISSUE'), 0)   AS "issueQty",
+           COALESCE(SUM(quantity) FILTER (WHERE type = 'USAGE'), 0)   AS "usageQty",
+           COALESCE(SUM(quantity) FILTER (WHERE type = 'RETURN'), 0)  AS "returnQty"
+      FROM stock_movements
+     WHERE occurred_at >= ${new Date(fromIso)}
+  `;
   return (
-    row ?? {
+    rows[0] ?? {
       receiptCount: 0, issueCount: 0, usageCount: 0, returnCount: 0,
       receiptQty: 0, issueQty: 0, usageQty: 0, returnQty: 0,
     }
@@ -463,17 +407,16 @@ export async function getDailyActivity(days: number): Promise<DailyActivity[]> {
   start.setHours(0, 0, 0, 0);
   start.setDate(start.getDate() - (days - 1));
 
-  const rows = await queryAll<DailyActivity>(
-    `SELECT substr(occurred_at, 1, 10) AS day,
-              COUNT(*) FILTER (WHERE type = 'RECEIPT')::int AS "receipts",
-              COUNT(*) FILTER (WHERE type = 'ISSUE')::int AS "issues",
-              COUNT(*) FILTER (WHERE type = 'USAGE')::int AS "usages",
-              COUNT(*) FILTER (WHERE type = 'RETURN')::int AS "returns"
-       FROM stock_movements
-      WHERE occurred_at >= ?
-      GROUP BY day`,
-    start.toISOString()
-  );
+  const rows = await db.$queryRaw<DailyActivity[]>`
+    SELECT to_char(occurred_at, 'YYYY-MM-DD') AS day,
+           COUNT(*) FILTER (WHERE type = 'RECEIPT')::int AS receipts,
+           COUNT(*) FILTER (WHERE type = 'ISSUE')::int   AS issues,
+           COUNT(*) FILTER (WHERE type = 'USAGE')::int   AS usages,
+           COUNT(*) FILTER (WHERE type = 'RETURN')::int  AS returns
+      FROM stock_movements
+     WHERE occurred_at >= ${start}
+     GROUP BY day
+  `;
 
   const byDay = new Map(rows.map((r) => [r.day, r]));
 
@@ -490,9 +433,7 @@ export async function getDailyActivity(days: number): Promise<DailyActivity[]> {
 
 export interface DashboardData {
   materialsCount: number;
-  /** Позиций материалов, числящихся за бригадирами (не сумма количеств). */
   foremanPositions: number;
-  /** Бригадиров, за которыми что-то числится. */
   foremenWithStock: number;
   lowStockMaterials: Material[];
   foremenCount: number;
@@ -504,12 +445,26 @@ export interface DashboardData {
 }
 
 export async function getDashboardData(): Promise<DashboardData> {
-  const materials = await listMaterials();
-
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
+
+  const [materials, counts, today, week, recentMovements, activity] = await Promise.all([
+    listMaterials(),
+    db.$queryRaw<
+      { foremenCount: number; projectsCount: number; foremanPositions: number; foremenWithStock: number }[]
+    >`
+      SELECT (SELECT COUNT(*)::int FROM foremen WHERE is_active)  AS "foremenCount",
+             (SELECT COUNT(*)::int FROM projects WHERE is_active) AS "projectsCount",
+             (SELECT COUNT(*)::int FROM foreman_stock WHERE quantity > 0) AS "foremanPositions",
+             (SELECT COUNT(DISTINCT foreman_id)::int FROM foreman_stock WHERE quantity > 0) AS "foremenWithStock"
+    `,
+    getPeriodTotals(startOfToday.toISOString()),
+    getPeriodTotals(weekAgo.toISOString()),
+    listMovements({ limit: 8 }),
+    getDailyActivity(14),
+  ]);
 
   const lowStockMaterials = materials
     .filter((m) => getStockStatus(m.quantity, m.minStock) !== "good")
@@ -519,29 +474,21 @@ export async function getDashboardData(): Promise<DashboardData> {
       return ra - rb;
     });
 
-  const counts = await queryOne<{
-    foremenCount: number;
-    projectsCount: number;
-    foremanPositions: number;
-    foremenWithStock: number;
-  }>(
-    `SELECT (SELECT COUNT(*) FROM foremen WHERE is_active = 1)  AS "foremenCount",
-            (SELECT COUNT(*)::int FROM projects WHERE is_active = 1) AS "projectsCount",
-            (SELECT COUNT(*)::int FROM foreman_stock WHERE quantity > 0) AS "foremanPositions",
-            (SELECT COUNT(DISTINCT foreman_id)::int FROM foreman_stock WHERE quantity > 0) AS "foremenWithStock"`
-  ) ?? { foremenCount: 0, projectsCount: 0, foremanPositions: 0, foremenWithStock: 0 };
+  const c = counts[0] ?? {
+    foremenCount: 0, projectsCount: 0, foremanPositions: 0, foremenWithStock: 0,
+  };
 
   return {
     materialsCount: materials.length,
-    foremanPositions: counts.foremanPositions,
-    foremenWithStock: counts.foremenWithStock,
+    foremanPositions: c.foremanPositions,
+    foremenWithStock: c.foremenWithStock,
     lowStockMaterials,
-    foremenCount: counts.foremenCount,
-    projectsCount: counts.projectsCount,
-    today: await getPeriodTotals(startOfToday.toISOString()),
-    week: await getPeriodTotals(weekAgo.toISOString()),
-    recentMovements: await listMovements({ limit: 8 }),
-    activity: await getDailyActivity(14),
+    foremenCount: c.foremenCount,
+    projectsCount: c.projectsCount,
+    today,
+    week,
+    recentMovements,
+    activity,
   };
 }
 
@@ -559,39 +506,38 @@ export interface BalancePoint {
  * Берётся `warehouse_after` последней операции каждого дня — это точное
  * значение, записанное в момент операции, а не восстановленное задним числом.
  */
-export async function getMaterialBalanceHistory(materialId: string, days: number): Promise<BalancePoint[]> {
+export async function getMaterialBalanceHistory(
+  materialId: string,
+  days: number
+): Promise<BalancePoint[]> {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   start.setDate(start.getDate() - (days - 1));
 
-  const rows = await queryAll<{ day: string; balance: number }>(
-    `SELECT substr(sm.occurred_at, 1, 10) AS day,
-            sm.warehouse_after AS balance
-       FROM stock_movements sm
-      WHERE sm.material_id = ?
-        AND sm.seq = (
-          SELECT sm2.seq FROM stock_movements sm2
-           WHERE sm2.material_id = sm.material_id
-             AND substr(sm2.occurred_at, 1, 10) = substr(sm.occurred_at, 1, 10)
-           ORDER BY sm2.occurred_at DESC, sm2.seq DESC
-           LIMIT 1
-        )
-      ORDER BY day`,
-    materialId
-  );
+  const rows = await db.$queryRaw<BalancePoint[]>`
+    SELECT to_char(sm.occurred_at, 'YYYY-MM-DD') AS day, sm.warehouse_after AS balance
+      FROM stock_movements sm
+     WHERE sm.material_id = ${materialId}
+       AND sm.seq = (
+         SELECT sm2.seq FROM stock_movements sm2
+          WHERE sm2.material_id = sm.material_id
+            AND to_char(sm2.occurred_at, 'YYYY-MM-DD') = to_char(sm.occurred_at, 'YYYY-MM-DD')
+          ORDER BY sm2.occurred_at DESC, sm2.seq DESC
+          LIMIT 1
+       )
+     ORDER BY day
+  `;
 
   // Остаток на начало периода — последнее значение до его начала.
-  const before = await queryOne<{ balance: number }>(
-    `SELECT warehouse_after AS balance FROM stock_movements
-      WHERE material_id = ? AND occurred_at < ?
-      ORDER BY occurred_at DESC, seq DESC LIMIT 1`,
-    materialId,
-    start.toISOString()
-  );
+  const before = await db.stockMovement.findFirst({
+    where: { materialId, occurredAt: { lt: start } },
+    orderBy: [{ occurredAt: "desc" }, { seq: "desc" }],
+    select: { warehouseAfter: true },
+  });
 
   const byDay = new Map(rows.map((r) => [r.day, r.balance]));
   const result: BalancePoint[] = [];
-  let running = before?.balance ?? 0;
+  let running = before?.warehouseAfter ?? 0;
 
   for (let i = 0; i < days; i++) {
     const d = new Date(start);
@@ -608,33 +554,31 @@ export async function getMaterialBalanceHistory(materialId: string, days: number
 export async function getMaterialHolders(
   materialId: string
 ): Promise<{ foremanId: string; foremanName: string; brigade: string; quantity: number }[]> {
-  return queryAll(
-    `SELECT fs.foreman_id AS "foremanId", f.name AS "foremanName", f.brigade, fs.quantity
-       FROM foreman_stock fs
-       JOIN foremen f ON f.id = fs.foreman_id
-      WHERE fs.material_id = ? AND fs.quantity > 0
-      ORDER BY fs.quantity DESC`,
-    materialId
-  );
+  const rows = await db.foremanStock.findMany({
+    where: { materialId, quantity: { gt: 0 } },
+    include: { foreman: { select: { name: true, brigade: true } } },
+    orderBy: { quantity: "desc" },
+  });
+  return rows.map((r) => ({
+    foremanId: r.foremanId,
+    foremanName: r.foreman.name,
+    brigade: r.foreman.brigade,
+    quantity: r.quantity,
+  }));
 }
 
-/** Итоги по материалу за всё время — сколько принято, выдано, израсходовано, возвращено. */
-export async function getMaterialTotals(materialId: string): Promise<{
-  received: number;
-  issued: number;
-  used: number;
-  returned: number;
-}> {
-  return (
-    await queryOne<{ received: number; issued: number; used: number; returned: number }>(
-      `SELECT COALESCE(SUM(CASE WHEN type = 'RECEIPT' THEN quantity END), 0) AS received,
-              COALESCE(SUM(CASE WHEN type = 'ISSUE'   THEN quantity END), 0) AS issued,
-              COALESCE(SUM(CASE WHEN type = 'USAGE'   THEN quantity END), 0) AS used,
-              COALESCE(SUM(CASE WHEN type = 'RETURN'  THEN quantity END), 0) AS returned
-         FROM stock_movements WHERE material_id = ?`,
-      materialId
-    ) ?? { received: 0, issued: 0, used: 0, returned: 0 }
-  );
+/** Итоги по материалу за всё время. */
+export async function getMaterialTotals(
+  materialId: string
+): Promise<{ received: number; issued: number; used: number; returned: number }> {
+  const rows = await db.$queryRaw<{ received: number; issued: number; used: number; returned: number }[]>`
+    SELECT COALESCE(SUM(quantity) FILTER (WHERE type = 'RECEIPT'), 0) AS received,
+           COALESCE(SUM(quantity) FILTER (WHERE type = 'ISSUE'), 0)   AS issued,
+           COALESCE(SUM(quantity) FILTER (WHERE type = 'USAGE'), 0)   AS used,
+           COALESCE(SUM(quantity) FILTER (WHERE type = 'RETURN'), 0)  AS returned
+      FROM stock_movements WHERE material_id = ${materialId}
+  `;
+  return rows[0] ?? { received: 0, issued: 0, used: 0, returned: 0 };
 }
 
 /* ------------------------------------------------------------------ */
@@ -644,7 +588,6 @@ export async function getMaterialTotals(materialId: string): Promise<{
 export interface ProjectSummary {
   projectId: string;
   foremenCount: number;
-  /** Сколько разных материалов проходило через объект. */
   materialCount: number;
   issueCount: number;
   usageCount: number;
@@ -653,59 +596,67 @@ export interface ProjectSummary {
 }
 
 export async function getProjectSummaries(): Promise<Map<string, ProjectSummary>> {
-  const rows = await queryAll<ProjectSummary>(
-    `SELECT p.id AS "projectId",
-            (SELECT COUNT(*)::int FROM foremen f WHERE f.project_id = p.id AND f.is_active = 1) AS "foremenCount",
-            (SELECT COUNT(DISTINCT material_id)::int FROM stock_movements WHERE project_id = p.id) AS "materialCount",
-            (SELECT COUNT(*)::int FROM stock_movements WHERE project_id = p.id AND type = 'ISSUE') AS "issueCount",
-            (SELECT COUNT(*)::int FROM stock_movements WHERE project_id = p.id AND type = 'USAGE') AS "usageCount",
-            (SELECT COUNT(*)::int FROM stock_movements WHERE project_id = p.id) AS "movementCount",
-            (SELECT MAX(occurred_at) FROM stock_movements WHERE project_id = p.id) AS "lastOperationAt"
-       FROM projects p`
+  const rows = await db.$queryRaw<
+    (Omit<ProjectSummary, "lastOperationAt"> & { lastOperationAt: Date | null })[]
+  >`
+    SELECT p.id AS "projectId",
+           (SELECT COUNT(*)::int FROM foremen f WHERE f.project_id = p.id AND f.is_active) AS "foremenCount",
+           (SELECT COUNT(DISTINCT material_id)::int FROM stock_movements WHERE project_id = p.id) AS "materialCount",
+           (SELECT COUNT(*)::int FROM stock_movements WHERE project_id = p.id AND type = 'ISSUE') AS "issueCount",
+           (SELECT COUNT(*)::int FROM stock_movements WHERE project_id = p.id AND type = 'USAGE') AS "usageCount",
+           (SELECT COUNT(*)::int FROM stock_movements WHERE project_id = p.id) AS "movementCount",
+           (SELECT MAX(occurred_at) FROM stock_movements WHERE project_id = p.id) AS "lastOperationAt"
+      FROM projects p
+  `;
+  return new Map(
+    rows.map((r) => [
+      r.projectId,
+      { ...r, lastOperationAt: r.lastOperationAt ? iso(r.lastOperationAt) : null },
+    ])
   );
-  return new Map(rows.map((r) => [r.projectId, r]));
 }
 
 export async function getProject(id: string): Promise<Project | null> {
-  const row = await queryOne<{
-    id: string;
-    name: string;
-    address: string;
-    is_active: number;
-    created_at: string;
-  }>("SELECT id, name, address, is_active, created_at FROM projects WHERE id = ?", id);
+  const row = await db.project.findUnique({ where: { id } });
   if (!row) return null;
   return {
     id: row.id,
     name: row.name,
     address: row.address,
-    isActive: row.is_active === 1,
-    createdAt: row.created_at,
+    isActive: row.isActive,
+    createdAt: iso(row.createdAt),
   };
 }
 
 /** Сколько какого материала ушло на объект — основа отчёта по объекту. */
-export async function getProjectMaterialTotals(
+export function getProjectMaterialTotals(
   projectId: string
 ): Promise<{ materialId: string; materialName: string; unit: string; issued: number; used: number }[]> {
-  return queryAll(
-    `SELECT sm.material_id AS "materialId", m.name AS "materialName", m.unit,
-            COALESCE(SUM(CASE WHEN sm.type = 'ISSUE' THEN sm.quantity END), 0) AS issued,
-            COALESCE(SUM(CASE WHEN sm.type = 'USAGE' THEN sm.quantity END), 0) AS used
-       FROM stock_movements sm
-       JOIN materials m ON m.id = sm.material_id
-      WHERE sm.project_id = ?
-      GROUP BY sm.material_id, m.name, m.unit
-      HAVING COALESCE(SUM(CASE WHEN sm.type = 'ISSUE' THEN sm.quantity END), 0) > 0
-          OR COALESCE(SUM(CASE WHEN sm.type = 'USAGE' THEN sm.quantity END), 0) > 0
-      ORDER BY lower(m.name)`,
-    projectId
-  );
+  return db.$queryRaw`
+    SELECT sm.material_id AS "materialId", m.name AS "materialName", m.unit,
+           COALESCE(SUM(CASE WHEN sm.type = 'ISSUE' THEN sm.quantity END), 0) AS issued,
+           COALESCE(SUM(CASE WHEN sm.type = 'USAGE' THEN sm.quantity END), 0) AS used
+      FROM stock_movements sm
+      JOIN materials m ON m.id = sm.material_id
+     WHERE sm.project_id = ${projectId}
+     GROUP BY sm.material_id, m.name, m.unit
+    HAVING COALESCE(SUM(CASE WHEN sm.type = 'ISSUE' THEN sm.quantity END), 0) > 0
+        OR COALESCE(SUM(CASE WHEN sm.type = 'USAGE' THEN sm.quantity END), 0) > 0
+     ORDER BY lower(m.name)
+  `;
 }
 
 /* ------------------------------------------------------------------ */
 /* Отчёты                                                              */
 /* ------------------------------------------------------------------ */
+
+/** Отбор по периоду для отчётов: пустой, если период не задан. */
+function periodFilter(fromIso?: string, toIso?: string) {
+  const clauses: Prisma.Sql[] = [];
+  if (fromIso) clauses.push(Prisma.sql` AND sm.occurred_at >= ${new Date(fromIso)}`);
+  if (toIso) clauses.push(Prisma.sql` AND sm.occurred_at <= ${new Date(toIso)}`);
+  return clauses.length ? Prisma.join(clauses, "") : Prisma.empty;
+}
 
 export interface StockReportRow {
   materialId: string;
@@ -722,41 +673,22 @@ export interface StockReportRow {
   returned: number;
 }
 
-/**
- * Сводный отчёт «остатки и обороты за период».
- * Обороты считаются по журналу движений, остатки берутся текущие —
- * это то, что нужно кладовщику для сверки.
- */
-export async function getStockReport(fromIso?: string, toIso?: string): Promise<StockReportRow[]> {
-  const params: SqlParam[] = [];
-  let periodClause = "";
-  if (fromIso) {
-    periodClause += " AND sm.occurred_at >= ?";
-    params.push(fromIso);
-  }
-  if (toIso) {
-    periodClause += " AND sm.occurred_at <= ?";
-    params.push(toIso);
-  }
-
-  // Параметры повторяются для каждого из четырёх подсчётов оборота.
-  const repeated = [...params, ...params, ...params, ...params];
-
-  return await queryAll<StockReportRow>(
-    `SELECT m.id AS "materialId", m.name AS "materialName", m.category, m.unit,
-            m.quantity AS "atWarehouse",
-            COALESCE((SELECT SUM(quantity) FROM foreman_stock WHERE material_id = m.id), 0) AS "atForemen",
-            m.quantity + COALESCE((SELECT SUM(quantity) FROM foreman_stock WHERE material_id = m.id), 0) AS total,
-            m.min_stock AS "minStock",
-            COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.material_id = m.id AND sm.type = 'RECEIPT'${periodClause}), 0) AS received,
-            COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.material_id = m.id AND sm.type = 'ISSUE'${periodClause}), 0) AS issued,
-            COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.material_id = m.id AND sm.type = 'USAGE'${periodClause}), 0) AS used,
-            COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.material_id = m.id AND sm.type = 'RETURN'${periodClause}), 0) AS returned
-       FROM materials m
-      WHERE m.is_active = 1
-      ORDER BY lower(m.name)`,
-    ...repeated
-  );
+export function getStockReport(fromIso?: string, toIso?: string): Promise<StockReportRow[]> {
+  const period = periodFilter(fromIso, toIso);
+  return db.$queryRaw<StockReportRow[]>`
+    SELECT m.id AS "materialId", m.name AS "materialName", m.category, m.unit,
+           m.quantity AS "atWarehouse",
+           COALESCE((SELECT SUM(quantity) FROM foreman_stock WHERE material_id = m.id), 0) AS "atForemen",
+           m.quantity + COALESCE((SELECT SUM(quantity) FROM foreman_stock WHERE material_id = m.id), 0) AS total,
+           m.min_stock AS "minStock",
+           COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.material_id = m.id AND sm.type = 'RECEIPT'${period}), 0) AS received,
+           COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.material_id = m.id AND sm.type = 'ISSUE'${period}), 0)   AS issued,
+           COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.material_id = m.id AND sm.type = 'USAGE'${period}), 0)   AS used,
+           COALESCE((SELECT SUM(sm.quantity) FROM stock_movements sm WHERE sm.material_id = m.id AND sm.type = 'RETURN'${period}), 0)  AS returned
+      FROM materials m
+     WHERE m.is_active
+     ORDER BY lower(m.name)
+  `;
 }
 
 export interface ForemanReportRow {
@@ -777,36 +709,25 @@ export interface ForemanReportRow {
  * Разбивка по материалам обязательна, потому что у каждого своя единица
  * измерения и суммировать их в одно число нельзя.
  */
-export async function getForemanReport(fromIso?: string, toIso?: string): Promise<ForemanReportRow[]> {
-  const params: SqlParam[] = [];
-  let periodClause = "";
-  if (fromIso) {
-    periodClause += " AND sm.occurred_at >= ?";
-    params.push(fromIso);
-  }
-  if (toIso) {
-    periodClause += " AND sm.occurred_at <= ?";
-    params.push(toIso);
-  }
-
-  return await queryAll<ForemanReportRow>(
-    `SELECT sm.foreman_id || ':' || sm.material_id AS "rowId",
-            f.name AS "foremanName", f.brigade, p.name AS "projectName",
-            m.name AS "materialName", m.unit,
-            COALESCE(SUM(CASE WHEN sm.type = 'ISSUE'  THEN sm.quantity END), 0) AS issued,
-            COALESCE(SUM(CASE WHEN sm.type = 'USAGE'  THEN sm.quantity END), 0) AS used,
-            COALESCE(SUM(CASE WHEN sm.type = 'RETURN' THEN sm.quantity END), 0) AS returned,
-            COALESCE((SELECT fs.quantity FROM foreman_stock fs
-                       WHERE fs.foreman_id = sm.foreman_id AND fs.material_id = sm.material_id), 0) AS "onHand"
-       FROM stock_movements sm
-       JOIN foremen f   ON f.id = sm.foreman_id
-       JOIN materials m ON m.id = sm.material_id
-       LEFT JOIN projects p ON p.id = f.project_id
-      WHERE sm.foreman_id IS NOT NULL${periodClause}
-      GROUP BY sm.foreman_id, sm.material_id, f.name, f.brigade, p.name, m.name, m.unit
-      ORDER BY lower(f.name), lower(m.name)`,
-    ...params
-  );
+export function getForemanReport(fromIso?: string, toIso?: string): Promise<ForemanReportRow[]> {
+  const period = periodFilter(fromIso, toIso);
+  return db.$queryRaw<ForemanReportRow[]>`
+    SELECT sm.foreman_id || ':' || sm.material_id AS "rowId",
+           f.name AS "foremanName", f.brigade, p.name AS "projectName",
+           m.name AS "materialName", m.unit,
+           COALESCE(SUM(CASE WHEN sm.type = 'ISSUE'  THEN sm.quantity END), 0) AS issued,
+           COALESCE(SUM(CASE WHEN sm.type = 'USAGE'  THEN sm.quantity END), 0) AS used,
+           COALESCE(SUM(CASE WHEN sm.type = 'RETURN' THEN sm.quantity END), 0) AS returned,
+           COALESCE((SELECT fs.quantity FROM foreman_stock fs
+                      WHERE fs.foreman_id = sm.foreman_id AND fs.material_id = sm.material_id), 0) AS "onHand"
+      FROM stock_movements sm
+      JOIN foremen f   ON f.id = sm.foreman_id
+      JOIN materials m ON m.id = sm.material_id
+      LEFT JOIN projects p ON p.id = f.project_id
+     WHERE sm.foreman_id IS NOT NULL${period}
+     GROUP BY sm.foreman_id, sm.material_id, f.name, f.brigade, p.name, m.name, m.unit
+     ORDER BY lower(f.name), lower(m.name)
+  `;
 }
 
 export interface ProjectReportRow {
@@ -820,35 +741,20 @@ export interface ProjectReportRow {
   remaining: number;
 }
 
-/**
- * Отчёт «расход материалов по объектам»: одна строка — объект и материал,
- * с собственной единицей измерения.
- */
-export async function getProjectReport(fromIso?: string, toIso?: string): Promise<ProjectReportRow[]> {
-  const params: SqlParam[] = [];
-  let periodClause = "";
-  if (fromIso) {
-    periodClause += " AND sm.occurred_at >= ?";
-    params.push(fromIso);
-  }
-  if (toIso) {
-    periodClause += " AND sm.occurred_at <= ?";
-    params.push(toIso);
-  }
-
-  return await queryAll<ProjectReportRow>(
-    `SELECT sm.project_id || ':' || sm.material_id AS "rowId",
-            p.name AS "projectName", p.address, m.name AS "materialName", m.unit,
-            COALESCE(SUM(CASE WHEN sm.type = 'ISSUE' THEN sm.quantity END), 0) AS issued,
-            COALESCE(SUM(CASE WHEN sm.type = 'USAGE' THEN sm.quantity END), 0) AS used,
-            COALESCE(SUM(CASE WHEN sm.type = 'ISSUE' THEN sm.quantity END), 0)
-              - COALESCE(SUM(CASE WHEN sm.type = 'USAGE' THEN sm.quantity END), 0) AS remaining
-       FROM stock_movements sm
-       JOIN projects p  ON p.id = sm.project_id
-       JOIN materials m ON m.id = sm.material_id
-      WHERE sm.project_id IS NOT NULL${periodClause}
-      GROUP BY sm.project_id, sm.material_id, p.name, p.address, m.name, m.unit
-      ORDER BY lower(p.name), lower(m.name)`,
-    ...params
-  );
+export function getProjectReport(fromIso?: string, toIso?: string): Promise<ProjectReportRow[]> {
+  const period = periodFilter(fromIso, toIso);
+  return db.$queryRaw<ProjectReportRow[]>`
+    SELECT sm.project_id || ':' || sm.material_id AS "rowId",
+           p.name AS "projectName", p.address, m.name AS "materialName", m.unit,
+           COALESCE(SUM(CASE WHEN sm.type = 'ISSUE' THEN sm.quantity END), 0) AS issued,
+           COALESCE(SUM(CASE WHEN sm.type = 'USAGE' THEN sm.quantity END), 0) AS used,
+           COALESCE(SUM(CASE WHEN sm.type = 'ISSUE' THEN sm.quantity END), 0)
+             - COALESCE(SUM(CASE WHEN sm.type = 'USAGE' THEN sm.quantity END), 0) AS remaining
+      FROM stock_movements sm
+      JOIN projects p  ON p.id = sm.project_id
+      JOIN materials m ON m.id = sm.material_id
+     WHERE sm.project_id IS NOT NULL${period}
+     GROUP BY sm.project_id, sm.material_id, p.name, p.address, m.name, m.unit
+     ORDER BY lower(p.name), lower(m.name)
+  `;
 }

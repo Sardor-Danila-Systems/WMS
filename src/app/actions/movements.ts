@@ -3,8 +3,8 @@
 import { refresh } from "next/cache";
 
 import { requirePermission } from "@/lib/auth/dal";
-import { getDictionary, getLocale } from "@/i18n/server";
-import { translateValidation } from "@/i18n";
+import { getIntlTag, getLooseT, getValueTranslator } from "@/i18n/server";
+import { translateValidation } from "@/i18n/validation";
 import { issueSchema, receiptSchema, returnSchema, usageSchema } from "@/lib/validation";
 import { recordMovement } from "@/server/movements";
 import { toActionError } from "@/server/errors";
@@ -56,7 +56,7 @@ export async function createReceipt(formData: FormData): Promise<ActionResult> {
       const issue = parsed.error.issues[0];
       return {
         ok: false,
-        error: translateValidation(await getDictionary(), issue.message),
+        error: translateValidation(await getLooseT(), issue.message),
         field: String(issue.path[0] ?? ""),
       };
     }
@@ -75,7 +75,15 @@ export async function createReceipt(formData: FormData): Promise<ActionResult> {
     refresh();
     return { ok: true };
   } catch (error) {
-    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
+    return {
+      ok: false,
+      ...toActionError(
+        error,
+        await getLooseT(),
+        await getIntlTag(),
+        await getValueTranslator("units")
+      ),
+    };
   }
 }
 
@@ -89,7 +97,7 @@ export async function createIssue(formData: FormData): Promise<ActionResult> {
       const issue = parsed.error.issues[0];
       return {
         ok: false,
-        error: translateValidation(await getDictionary(), issue.message),
+        error: translateValidation(await getLooseT(), issue.message),
         field: String(issue.path[0] ?? ""),
       };
     }
@@ -108,7 +116,15 @@ export async function createIssue(formData: FormData): Promise<ActionResult> {
     refresh();
     return { ok: true };
   } catch (error) {
-    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
+    return {
+      ok: false,
+      ...toActionError(
+        error,
+        await getLooseT(),
+        await getIntlTag(),
+        await getValueTranslator("units")
+      ),
+    };
   }
 }
 
@@ -122,7 +138,7 @@ export async function createUsage(formData: FormData): Promise<ActionResult> {
       const issue = parsed.error.issues[0];
       return {
         ok: false,
-        error: translateValidation(await getDictionary(), issue.message),
+        error: translateValidation(await getLooseT(), issue.message),
         field: String(issue.path[0] ?? ""),
       };
     }
@@ -141,7 +157,15 @@ export async function createUsage(formData: FormData): Promise<ActionResult> {
     refresh();
     return { ok: true };
   } catch (error) {
-    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
+    return {
+      ok: false,
+      ...toActionError(
+        error,
+        await getLooseT(),
+        await getIntlTag(),
+        await getValueTranslator("units")
+      ),
+    };
   }
 }
 
@@ -155,7 +179,7 @@ export async function createReturn(formData: FormData): Promise<ActionResult> {
       const issue = parsed.error.issues[0];
       return {
         ok: false,
-        error: translateValidation(await getDictionary(), issue.message),
+        error: translateValidation(await getLooseT(), issue.message),
         field: String(issue.path[0] ?? ""),
       };
     }
@@ -174,6 +198,14 @@ export async function createReturn(formData: FormData): Promise<ActionResult> {
     refresh();
     return { ok: true };
   } catch (error) {
-    return { ok: false, ...toActionError(error, await getDictionary(), await getLocale()) };
+    return {
+      ok: false,
+      ...toActionError(
+        error,
+        await getLooseT(),
+        await getIntlTag(),
+        await getValueTranslator("units")
+      ),
+    };
   }
 }

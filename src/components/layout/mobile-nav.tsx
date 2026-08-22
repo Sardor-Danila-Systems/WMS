@@ -16,13 +16,13 @@ export function MobileNav({ role, companyName }: { role: Role; companyName: stri
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
-        render={<Button variant="ghost" size="icon" className="-ml-1.5 lg:hidden" aria-label={t.nav.menu} />}
+        render={<Button variant="ghost" size="icon" className="-ml-1.5 lg:hidden" aria-label={t("nav.menu")} />}
       >
         <Menu className="h-5 w-5" />
       </SheetTrigger>
       <SheetContent side="left" className="flex w-[270px] flex-col p-0">
         <SheetHeader className="h-14 shrink-0 flex-row items-center space-y-0 border-b border-border px-4 py-0">
-          <SheetTitle className="sr-only">{t.nav.menu}</SheetTitle>
+          <SheetTitle className="sr-only">{t("nav.menu")}</SheetTitle>
           <BrandMark companyName={companyName} />
         </SheetHeader>
         <SidebarNav role={role} onNavigate={() => setOpen(false)} />

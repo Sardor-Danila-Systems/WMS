@@ -27,8 +27,8 @@ export function SidebarNav({
     <nav className="flex-1 overflow-y-auto px-3 py-4">
       {groups.map((group) => (
         <div key={group.key} className="mb-6 last:mb-0">
-          <div className="px-2.5 pb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60">
-            {t.nav.groups[group.key]}
+          <div className="px-2.5 pb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/60">
+            {t(`nav.groups.${group.key}`)}
           </div>
           <div className="space-y-px">
             {group.items.map((item) => {
@@ -40,7 +40,7 @@ export function SidebarNav({
                   onClick={onNavigate}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "group relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] transition-colors",
+                    "group relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[14.5px] transition-colors",
                     active
                       ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
                       : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
@@ -59,7 +59,7 @@ export function SidebarNav({
                       active ? "text-primary" : "text-muted-foreground/70"
                     )}
                   />
-                  <span className="truncate">{t.nav[item.key] as string}</span>
+                  <span className="truncate">{t(`nav.${item.key}`)}</span>
                 </Link>
               );
             })}
@@ -75,12 +75,12 @@ export function BrandMark({ companyName }: { companyName: string }) {
   const t = useT();
   return (
     <div className="flex items-center gap-2.5">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-[11px] font-bold tracking-tight text-primary-foreground">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary text-[12.5px] font-bold tracking-tight text-primary-foreground">
         GA
       </div>
       <div className="flex min-w-0 flex-col leading-tight">
-        <span className="truncate text-[13px] font-semibold tracking-tight">{t.app.name}</span>
-        <span className="truncate text-[11px] text-muted-foreground">{companyName}</span>
+        <span className="truncate text-[14.5px] font-semibold tracking-tight">{t("app.name")}</span>
+        <span className="truncate text-[12.5px] text-muted-foreground">{companyName}</span>
       </div>
     </div>
   );

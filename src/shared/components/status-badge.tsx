@@ -4,7 +4,7 @@ import { ArrowDownToLine, ArrowUpFromLine, Hammer, RotateCcw } from "lucide-reac
 
 import { cn } from "@/lib/utils";
 import { MOVEMENT_COLORS, STOCK_STATUS_COLORS, type StockStatus } from "@/constants/colors";
-import { useI18n } from "@/i18n/client";
+import { useIntlTag, useT } from "@/i18n/client";
 import { formatNumber } from "@/lib/format";
 import type { MovementType } from "@/types";
 
@@ -16,44 +16,44 @@ const MOVEMENT_ICONS: Record<MovementType, typeof ArrowDownToLine> = {
 };
 
 export function MovementTypeBadge({ type }: { type: MovementType }) {
-  const { t } = useI18n();
+  const t = useT();
   const style = MOVEMENT_COLORS[type];
   const Icon = MOVEMENT_ICONS[type];
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-[12.5px] font-medium",
         style.bg,
         style.text,
         style.border
       )}
     >
       <Icon className="h-3 w-3" />
-      {t.movements[type]}
+      {t(`movements.${type}`)}
     </span>
   );
 }
 
 export function StockStatusBadge({ status }: { status: StockStatus }) {
-  const { t } = useI18n();
+  const t = useT();
   const style = STOCK_STATUS_COLORS[status];
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-medium",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-0.5 text-[12.5px] font-medium",
         style.bg,
         style.text
       )}
     >
       <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: style.color }} />
-      {t.stockStatus[status]}
+      {t(`stockStatus.${status}`)}
     </span>
   );
 }
 
 /** Показывает знак и величину изменения остатка: +120 / −40. */
 export function DeltaValue({ value, unit }: { value: number; unit?: string }) {
-  const { locale } = useI18n();
+  const locale = useIntlTag();
   if (value === 0) return <span className="text-muted-foreground">—</span>;
   const positive = value > 0;
   return (

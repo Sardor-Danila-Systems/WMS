@@ -1,20 +1,28 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Golos_Text, JetBrains_Mono } from "next/font/google";
 
 import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import { I18nProvider } from "@/i18n/client";
+import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "@/i18n/server";
 
-const sans = Inter({
+/**
+ * Golos Text спроектирован для кириллических интерфейсов: у него ровный ритм
+ * и хорошо читаемые цифры, что важно для плотных складских таблиц.
+ * Латиница поддерживается полностью — нужна для узбекского.
+ */
+const sans = Golos_Text({
   variable: "--font-geist-sans",
   subsets: ["latin", "cyrillic"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
 const mono = JetBrains_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin", "cyrillic"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -32,12 +40,12 @@ export default async function RootLayout({
   return (
     <html lang={locale} className={`${sans.variable} ${mono.variable} h-full antialiased`}>
       <body className="min-h-full bg-background text-foreground">
-        <I18nProvider locale={locale}>
+        <NextIntlClientProvider>
           <TooltipProvider delay={200}>
             {children}
             <Toaster position="top-right" richColors closeButton />
           </TooltipProvider>
-        </I18nProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

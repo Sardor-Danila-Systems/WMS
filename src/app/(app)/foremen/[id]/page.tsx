@@ -10,8 +10,7 @@ import {
   listMovements,
   listProjects,
 } from "@/server/queries";
-import { getDictionary, getLocale } from "@/i18n/server";
-import { translateValue } from "@/i18n";
+import { getIntlTag, getT, getValueTranslator } from "@/i18n/server";
 import { formatQuantity } from "@/lib/format";
 import { StatCard } from "@/shared/components/stat-card";
 import { EmptyState } from "@/shared/components/empty-state";
@@ -30,8 +29,8 @@ export default async function ForemanDetailPage({ params }: { params: Promise<{ 
 
   const [t, locale, stock, materialTotals, summaries, movements, refData, projects] =
     await Promise.all([
-      getDictionary(),
-      getLocale(),
+      getT(),
+      getIntlTag(),
       getForemanStock(id),
       getForemanMaterialTotals(id),
       getForemenSummaries(),
@@ -39,28 +38,29 @@ export default async function ForemanDetailPage({ params }: { params: Promise<{ 
       getOperationRefData(),
       listProjects(),
     ]);
+  const unitLabel = await getValueTranslator("units");
 
   const summary = summaries.get(id);
-  const unitOf = (unit: string) => translateValue(t.units, unit);
+  const unitOf = (unit: string) => unitLabel(unit);
 
   return (
     <div className="space-y-5">
       <div>
         <Link
           href="/foremen"
-          className="mb-3 inline-flex items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground"
+          className="mb-3 inline-flex items-center gap-1.5 text-[14.5px] text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          {t.foremen.all}
+          {t("foremen.all")}
         </Link>
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h2 className="text-lg font-semibold tracking-tight sm:text-[19px]">{foreman.name}</h2>
-              {!foreman.isActive && <Badge variant="outline">{t.foremen.inactive}</Badge>}
+              <h2 className="text-lg font-semibold tracking-tight sm:text-[22px]">{foreman.name}</h2>
+              {!foreman.isActive && <Badge variant="outline">{t("foremen.inactive")}</Badge>}
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-muted-foreground">
+            <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[14.5px] text-muted-foreground">
               {foreman.brigade && <span>{foreman.brigade}</span>}
               {foreman.projectName && <span>· {foreman.projectName}</span>}
               {foreman.phone && (
@@ -83,47 +83,47 @@ export default async function ForemanDetailPage({ params }: { params: Promise<{ 
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
-          label={t.foremen.detail.positionsOnHand}
+          label={t("foremen.detail.positionsOnHand")}
           value={String(stock.length)}
           icon={Boxes}
-          hint={stock.length > 0 ? t.foremen.detail.needsAction : t.foremen.detail.allClosed}
+          hint={stock.length > 0 ? t("foremen.detail.needsAction") : t("foremen.detail.allClosed")}
           tone={stock.length > 0 ? "warning" : "neutral"}
         />
         <StatCard
-          label={t.foremen.issueCount}
+          label={t("foremen.issueCount")}
           value={String(summary?.issueCount ?? 0)}
           icon={PackageMinus}
-          hint={t.foremen.detail.issuedHint}
+          hint={t("foremen.detail.issuedHint")}
           tone="accent"
         />
         <StatCard
-          label={t.foremen.usageCount}
+          label={t("foremen.usageCount")}
           value={String(summary?.usageCount ?? 0)}
           icon={Hammer}
-          hint={t.foremen.detail.usedHint}
+          hint={t("foremen.detail.usedHint")}
           tone="neutral"
         />
         <StatCard
-          label={t.foremen.returnCount}
+          label={t("foremen.returnCount")}
           value={String(summary?.returnCount ?? 0)}
           icon={Undo2}
-          hint={t.foremen.detail.returnedHint}
+          hint={t("foremen.detail.returnedHint")}
           tone="neutral"
         />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-[13px] font-semibold">
-            {t.foremen.detail.materialsTitle}
+          <CardTitle className="text-[14.5px] font-semibold">
+            {t("foremen.detail.materialsTitle")}
           </CardTitle>
-          <CardDescription className="text-xs">{t.foremen.detail.materialsHint}</CardDescription>
+          <CardDescription className="text-[13px]">{t("foremen.detail.materialsHint")}</CardDescription>
         </CardHeader>
         <CardContent className="px-0 sm:px-6">
           {materialTotals.length === 0 ? (
             <EmptyState
-              message={t.foremen.detail.noMaterials}
-              description={t.foremen.detail.noMaterialsHint}
+              message={t("foremen.detail.noMaterials")}
+              description={t("foremen.detail.noMaterialsHint")}
             />
           ) : (
             <>
@@ -133,24 +133,24 @@ export default async function ForemanDetailPage({ params }: { params: Promise<{ 
                   <div key={row.materialId} className="px-4 py-3">
                     <Link
                       href={`/materials/${row.materialId}`}
-                      className="text-[13px] font-medium hover:underline"
+                      className="text-[14.5px] font-medium hover:underline"
                     >
                       {row.materialName}
                     </Link>
-                    <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                      <dt className="text-muted-foreground">{t.foremen.detail.received}</dt>
+                    <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[13px]">
+                      <dt className="text-muted-foreground">{t("foremen.detail.received")}</dt>
                       <dd className="text-right tabular-nums">
                         {formatQuantity(row.received, unitOf(row.unit), locale)}
                       </dd>
-                      <dt className="text-muted-foreground">{t.foremen.detail.used}</dt>
+                      <dt className="text-muted-foreground">{t("foremen.detail.used")}</dt>
                       <dd className="text-right tabular-nums">
                         {formatQuantity(row.used, unitOf(row.unit), locale)}
                       </dd>
-                      <dt className="text-muted-foreground">{t.foremen.detail.returned}</dt>
+                      <dt className="text-muted-foreground">{t("foremen.detail.returned")}</dt>
                       <dd className="text-right tabular-nums">
                         {formatQuantity(row.returned, unitOf(row.unit), locale)}
                       </dd>
-                      <dt className="font-medium">{t.foremen.detail.onHand}</dt>
+                      <dt className="font-medium">{t("foremen.detail.onHand")}</dt>
                       <dd
                         className={
                           row.onHand > 0
@@ -169,26 +169,26 @@ export default async function ForemanDetailPage({ params }: { params: Promise<{ 
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="text-[11px] font-medium uppercase text-muted-foreground">
-                        {t.operations.material}
+                      <TableHead className="text-[12.5px] font-medium uppercase text-muted-foreground">
+                        {t("operations.material")}
                       </TableHead>
-                      <TableHead className="text-right text-[11px] font-medium uppercase text-muted-foreground">
-                        {t.foremen.detail.received}
+                      <TableHead className="text-right text-[12.5px] font-medium uppercase text-muted-foreground">
+                        {t("foremen.detail.received")}
                       </TableHead>
-                      <TableHead className="text-right text-[11px] font-medium uppercase text-muted-foreground">
-                        {t.foremen.detail.used}
+                      <TableHead className="text-right text-[12.5px] font-medium uppercase text-muted-foreground">
+                        {t("foremen.detail.used")}
                       </TableHead>
-                      <TableHead className="text-right text-[11px] font-medium uppercase text-muted-foreground">
-                        {t.foremen.detail.returned}
+                      <TableHead className="text-right text-[12.5px] font-medium uppercase text-muted-foreground">
+                        {t("foremen.detail.returned")}
                       </TableHead>
-                      <TableHead className="text-right text-[11px] font-medium uppercase text-muted-foreground">
-                        {t.foremen.detail.onHand}
+                      <TableHead className="text-right text-[12.5px] font-medium uppercase text-muted-foreground">
+                        {t("foremen.detail.onHand")}
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {materialTotals.map((row) => (
-                      <TableRow key={row.materialId} className="text-[13px]">
+                      <TableRow key={row.materialId} className="text-[14.5px]">
                         <TableCell>
                           <Link href={`/materials/${row.materialId}`} className="font-medium hover:underline">
                             {row.materialName}
@@ -225,12 +225,12 @@ export default async function ForemanDetailPage({ params }: { params: Promise<{ 
       </Card>
 
       <div>
-        <h3 className="mb-2.5 text-[13px] font-semibold">{t.foremen.detail.history}</h3>
+        <h3 className="mb-2.5 text-[14.5px] font-semibold">{t("foremen.detail.history")}</h3>
         <MovementsTable
           movements={movements}
           columns={["type", "date", "material", "quantity", "project", "user", "reason", "comment"]}
           pageSize={10}
-          emptyMessage={t.foremen.detail.noHistory}
+          emptyMessage={t("foremen.detail.noHistory")}
           exportName={`brigadir-${foreman.name}`}
         />
       </div>

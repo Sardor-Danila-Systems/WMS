@@ -14,8 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { formatDate, formatQuantity } from "@/lib/format";
 import { exportToCsv, exportToXlsx } from "@/lib/export";
-import { useI18n } from "@/i18n/client";
-import { translateValue } from "@/i18n";
+import { useIntlTag, useT } from "@/i18n/client";
+import { useValueTranslator } from "@/i18n/values";
 import type { Material } from "@/types";
 
 export function MaterialsTable({
@@ -26,13 +26,16 @@ export function MaterialsTable({
   initialLowStockOnly?: boolean;
 }) {
   const router = useRouter();
-  const { t, locale } = useI18n();
+  const t = useT();
+  const unitLabel = useValueTranslator("units");
+  const categoryLabel = useValueTranslator("categories");
+  const locale = useIntlTag();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
   const [onlyLowStock, setOnlyLowStock] = useState(initialLowStockOnly);
 
-  const unitOf = (unit: string) => translateValue(t.units, unit);
-  const categoryOf = (value: string) => translateValue(t.categories, value);
+  const unitOf = (unit: string) => unitLabel(unit);
+  const categoryOf = (value: string) => categoryLabel(value);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -56,18 +59,18 @@ export function MaterialsTable({
   const columns: DataTableColumn<Material>[] = [
     {
       id: "name",
-      header: t.materials.name,
+      header: t("materials.name"),
       accessor: (m) => (
         <div className="min-w-0">
           <div className="truncate font-medium">{m.name}</div>
-          <div className="truncate text-xs text-muted-foreground">{categoryOf(m.category)}</div>
+          <div className="truncate text-[13px] text-muted-foreground">{categoryOf(m.category)}</div>
         </div>
       ),
       sortValue: (m) => m.name,
     },
     {
       id: "quantity",
-      header: t.materials.atWarehouse,
+      header: t("materials.atWarehouse"),
       accessor: (m) => (
         <span className="whitespace-nowrap font-medium tabular-nums">
           {formatQuantity(m.quantity, unitOf(m.unit), locale)}
@@ -78,7 +81,7 @@ export function MaterialsTable({
     },
     {
       id: "atForemen",
-      header: t.materials.atForemen,
+      header: t("materials.atForemen"),
       accessor: (m) =>
         m.atForemen > 0 ? (
           <span className="whitespace-nowrap tabular-nums text-[#9c4d16]">
@@ -92,7 +95,7 @@ export function MaterialsTable({
     },
     {
       id: "minStock",
-      header: t.materials.minStockShort,
+      header: t("materials.minStockShort"),
       accessor: (m) => (
         <span className="whitespace-nowrap tabular-nums text-muted-foreground">
           {formatQuantity(m.minStock, unitOf(m.unit), locale)}
@@ -103,13 +106,13 @@ export function MaterialsTable({
     },
     {
       id: "status",
-      header: t.common.status,
+      header: t("common.status"),
       accessor: (m) => <StockStatusBadge status={getStockStatus(m.quantity, m.minStock)} />,
       sortValue: (m) => (m.minStock > 0 ? m.quantity / m.minStock : Number.MAX_SAFE_INTEGER),
     },
     {
       id: "lastReceipt",
-      header: t.materials.lastReceipt,
+      header: t("materials.lastReceipt"),
       accessor: (m) => (
         <span className="whitespace-nowrap text-muted-foreground">
           {m.lastReceiptDate ? formatDate(m.lastReceiptDate, locale) : "—"}
@@ -120,15 +123,15 @@ export function MaterialsTable({
   ];
 
   const headers = [
-    t.materials.name,
-    t.materials.category,
-    t.materials.unit,
-    t.materials.atWarehouse,
-    t.materials.atForemen,
-    t.common.total,
-    t.materials.minStockShort,
-    t.common.status,
-    t.materials.lastReceipt,
+    t("materials.name"),
+    t("materials.category"),
+    t("materials.unit"),
+    t("materials.atWarehouse"),
+    t("materials.atForemen"),
+    t("common.total"),
+    t("materials.minStockShort"),
+    t("common.status"),
+    t("materials.lastReceipt"),
   ];
 
   const rows = () =>
@@ -140,7 +143,7 @@ export function MaterialsTable({
       m.atForemen,
       m.quantity + m.atForemen,
       m.minStock,
-      t.stockStatus[getStockStatus(m.quantity, m.minStock)],
+      t(`stockStatus.${getStockStatus(m.quantity, m.minStock)}`),
       m.lastReceiptDate ? formatDate(m.lastReceiptDate, locale) : "",
     ]);
 
@@ -152,9 +155,9 @@ export function MaterialsTable({
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder={t.materials.searchPlaceholder}
+            placeholder={t("materials.searchPlaceholder")}
             className="pl-8"
-            aria-label={t.common.search}
+            aria-label={t("common.search")}
           />
         </div>
 
@@ -163,15 +166,15 @@ export function MaterialsTable({
             value={category}
             onValueChange={(value) => setCategory(value ?? "all")}
             items={{
-              all: t.materials.allCategories,
+              all: t("materials.allCategories"),
               ...Object.fromEntries(CATEGORIES.map((c) => [c, categoryOf(c)])),
             }}
           >
-            <SelectTrigger className="flex-1 sm:w-52" aria-label={t.materials.category}>
-              <SelectValue placeholder={t.materials.category} />
+            <SelectTrigger className="flex-1 sm:w-52" aria-label={t("materials.category")}>
+              <SelectValue placeholder={t("materials.category")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">{t.materials.allCategories}</SelectItem>
+              <SelectItem value="all">{t("materials.allCategories")}</SelectItem>
               {CATEGORIES.map((c) => (
                 <SelectItem key={c} value={c}>
                   {categoryOf(c)}
@@ -191,12 +194,12 @@ export function MaterialsTable({
               className="h-1.5 w-1.5 rounded-full"
               style={{ backgroundColor: STOCK_STATUS_COLORS.critical.color }}
             />
-            {t.materials.lowStockFilter}
+            {t("materials.lowStockFilter")}
           </Button>
 
           <ExportMenu
             onExportCsv={() => exportToCsv("materialy.csv", headers, rows())}
-            onExportXlsx={() => exportToXlsx("materialy.xlsx", t.nav.materials, headers, rows())}
+            onExportXlsx={() => exportToXlsx("materialy.xlsx", t("nav.materials"), headers, rows())}
           />
         </div>
       </div>
@@ -205,19 +208,19 @@ export function MaterialsTable({
         columns={columns}
         data={filtered}
         rowKey={(m) => m.id}
-        emptyMessage={t.materials.notFound}
+        emptyMessage={t("materials.notFound")}
         onRowClick={(m) => router.push(`/materials/${m.id}`)}
         mobileCard={(m) => ({
           title: m.name,
           subtitle: (
             <>
               {categoryOf(m.category)}
-              {m.atForemen > 0 && ` · ${t.materials.atForemen}: ${formatQuantity(m.atForemen, unitOf(m.unit), locale)}`}
+              {m.atForemen > 0 && ` · ${t("materials.atForemen")}: ${formatQuantity(m.atForemen, unitOf(m.unit), locale)}`}
             </>
           ),
           trailing: (
             <div className="space-y-1">
-              <div className="text-[13px] font-semibold tabular-nums">
+              <div className="text-[14.5px] font-semibold tabular-nums">
                 {formatQuantity(m.quantity, unitOf(m.unit), locale)}
               </div>
               <StockStatusBadge status={getStockStatus(m.quantity, m.minStock)} />

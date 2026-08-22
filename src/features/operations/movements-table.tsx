@@ -9,9 +9,8 @@ import { ExportMenu } from "@/shared/components/export-menu";
 import { Input } from "@/components/ui/input";
 import { formatDate, formatDateTime, formatQuantity } from "@/lib/format";
 import { exportToCsv, exportToXlsx } from "@/lib/export";
-import { useI18n } from "@/i18n/client";
-import { translateValue } from "@/i18n";
-import type { Dictionary, Locale } from "@/i18n/types";
+import { useIntlTag, useT } from "@/i18n/client";
+import { useValueTranslator } from "@/i18n/values";
 import type { StockMovement } from "@/types";
 
 export type MovementColumnId =
@@ -32,11 +31,16 @@ export type MovementColumnId =
   | "reason"
   | "comment";
 
+type Translate = ReturnType<typeof useT>;
+
+/** Колонки собираются с уже готовыми переводчиками, чтобы хуки вызывались
+ *  только в самом компоненте. */
 function buildColumns(
-  t: Dictionary,
-  locale: Locale
+  t: Translate,
+  locale: string,
+  unitOf: (unit: string) => string,
+  reasonOf: (reason: string) => string
 ): Record<MovementColumnId, DataTableColumn<StockMovement>> {
-  const unitOf = (unit: string) => translateValue(t.units, unit);
   const numeric = { className: "text-right", headerClassName: "text-right" };
   const person = (header: string): DataTableColumn<StockMovement> => ({
     id: header,
@@ -48,13 +52,13 @@ function buildColumns(
   return {
     type: {
       id: "type",
-      header: t.history.filters.type,
+      header: t("history.filters.type"),
       accessor: (m) => <MovementTypeBadge type={m.type} />,
-      sortValue: (m) => t.movements[m.type],
+      sortValue: (m) => t(`movements.${m.type}`),
     },
     date: {
       id: "date",
-      header: t.operations.dateTime,
+      header: t("operations.dateTime"),
       accessor: (m) => (
         <span className="whitespace-nowrap tabular-nums">{formatDateTime(m.occurredAt, locale)}</span>
       ),
@@ -62,13 +66,13 @@ function buildColumns(
     },
     material: {
       id: "material",
-      header: t.operations.material,
+      header: t("operations.material"),
       accessor: (m) => <span className="font-medium">{m.materialName}</span>,
       sortValue: (m) => m.materialName,
     },
     quantity: {
       id: "quantity",
-      header: t.operations.quantity,
+      header: t("operations.quantity"),
       accessor: (m) => (
         <span className="whitespace-nowrap font-medium tabular-nums">
           {formatQuantity(m.quantity, unitOf(m.unit), locale)}
@@ -79,14 +83,14 @@ function buildColumns(
     },
     delta: {
       id: "delta",
-      header: t.operations.warehouseDelta,
+      header: t("operations.warehouseDelta"),
       accessor: (m) => <DeltaValue value={m.warehouseDelta} />,
       sortValue: (m) => m.warehouseDelta,
       ...numeric,
     },
     stockAfter: {
       id: "stockAfter",
-      header: t.operations.stockAfter,
+      header: t("operations.stockAfter"),
       accessor: (m) => (
         <span className="whitespace-nowrap tabular-nums text-muted-foreground">
           {formatQuantity(m.warehouseAfter, unitOf(m.unit), locale)}
@@ -97,43 +101,43 @@ function buildColumns(
     },
     foreman: {
       id: "foreman",
-      header: t.operations.foreman,
+      header: t("operations.foreman"),
       accessor: (m) => m.foremanName ?? <span className="text-muted-foreground">—</span>,
       sortValue: (m) => m.foremanName ?? "",
     },
     supplier: {
       id: "supplier",
-      header: t.operations.supplier,
+      header: t("operations.supplier"),
       accessor: (m) => m.supplierName ?? <span className="text-muted-foreground">—</span>,
       sortValue: (m) => m.supplierName ?? "",
     },
     project: {
       id: "project",
-      header: t.operations.project,
+      header: t("operations.project"),
       accessor: (m) => m.projectName ?? <span className="text-muted-foreground">—</span>,
       sortValue: (m) => m.projectName ?? "",
     },
     vehicle: {
       id: "vehicle",
-      header: t.operations.vehicle,
+      header: t("operations.vehicle"),
       accessor: (m) =>
         m.vehicleNumber ? (
-          <span className="whitespace-nowrap font-mono text-xs">{m.vehicleNumber}</span>
+          <span className="whitespace-nowrap font-mono text-[13px]">{m.vehicleNumber}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
       sortValue: (m) => m.vehicleNumber,
     },
-    acceptedBy: { ...person(t.operations.acceptedBy), id: "acceptedBy" },
-    issuedBy: { ...person(t.operations.issuedBy), id: "issuedBy" },
-    returnAcceptedBy: { ...person(t.operations.returnAcceptedBy), id: "returnAcceptedBy" },
-    user: { ...person(t.operations.processedBy), id: "user" },
+    acceptedBy: { ...person(t("operations.acceptedBy")), id: "acceptedBy" },
+    issuedBy: { ...person(t("operations.issuedBy")), id: "issuedBy" },
+    returnAcceptedBy: { ...person(t("operations.returnAcceptedBy")), id: "returnAcceptedBy" },
+    user: { ...person(t("operations.processedBy")), id: "user" },
     reason: {
       id: "reason",
-      header: t.operations.reason,
+      header: t("operations.reason"),
       accessor: (m) =>
         m.reason ? (
-          translateValue(t.returnReasons, m.reason)
+          reasonOf(m.reason)
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
@@ -141,7 +145,7 @@ function buildColumns(
     },
     comment: {
       id: "comment",
-      header: t.operations.comment,
+      header: t("operations.comment"),
       accessor: (m) => <span className="text-muted-foreground">{m.comment || "—"}</span>,
     },
   };
@@ -162,9 +166,12 @@ export function MovementsTable({
   searchable?: boolean;
   exportName?: string;
 }) {
-  const { t, locale } = useI18n();
+  const t = useT();
+  const unitLabel = useValueTranslator("units");
+  const reasonLabel = useValueTranslator("returnReasons");
+  const locale = useIntlTag();
   const [search, setSearch] = useState("");
-  const unitOf = (unit: string) => translateValue(t.units, unit);
+  const unitOf = (unit: string) => unitLabel(unit);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -176,29 +183,29 @@ export function MovementsTable({
     );
   }, [movements, search]);
 
-  const all = buildColumns(t, locale);
+  const all = buildColumns(t, locale, unitLabel, reasonLabel);
   const tableColumns = columns.map((id) => all[id]);
 
   const exportHeaders = [
-    t.history.filters.type,
-    t.operations.date,
-    t.operations.material,
-    t.operations.quantity,
-    t.materials.unit,
-    t.operations.warehouseDelta,
-    t.operations.stockAfter,
-    t.operations.supplier,
-    t.operations.foreman,
-    t.operations.project,
-    t.operations.vehicle,
-    t.operations.employee,
-    t.operations.reason,
-    t.operations.comment,
+    t("history.filters.type"),
+    t("operations.date"),
+    t("operations.material"),
+    t("operations.quantity"),
+    t("materials.unit"),
+    t("operations.warehouseDelta"),
+    t("operations.stockAfter"),
+    t("operations.supplier"),
+    t("operations.foreman"),
+    t("operations.project"),
+    t("operations.vehicle"),
+    t("operations.employee"),
+    t("operations.reason"),
+    t("operations.comment"),
   ];
 
   const exportRows = () =>
     filtered.map((m) => [
-      t.movements[m.type],
+      t(`movements.${m.type}`),
       formatDateTime(m.occurredAt, locale),
       m.materialName,
       m.quantity,
@@ -210,7 +217,7 @@ export function MovementsTable({
       m.projectName ?? "",
       m.vehicleNumber,
       m.userName,
-      translateValue(t.returnReasons, m.reason),
+      reasonLabel(m.reason),
       m.comment,
     ]);
 
@@ -224,9 +231,9 @@ export function MovementsTable({
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder={t.operations.searchPlaceholder}
+                placeholder={t("operations.searchPlaceholder")}
                 className="pl-8"
-                aria-label={t.common.search}
+                aria-label={t("common.search")}
               />
             </div>
           )}
@@ -234,7 +241,7 @@ export function MovementsTable({
             <ExportMenu
               onExportCsv={() => exportToCsv(`${exportName}.csv`, exportHeaders, exportRows())}
               onExportXlsx={() =>
-                exportToXlsx(`${exportName}.xlsx`, t.nav.history, exportHeaders, exportRows())
+                exportToXlsx(`${exportName}.xlsx`, t("nav.history"), exportHeaders, exportRows())
               }
             />
           )}
@@ -246,7 +253,7 @@ export function MovementsTable({
         data={filtered}
         rowKey={(m) => m.id}
         pageSize={pageSize}
-        emptyMessage={emptyMessage ?? t.operations.notFound}
+        emptyMessage={emptyMessage ?? t("operations.notFound")}
         mobileCard={(m) => ({
           title: (
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -263,7 +270,7 @@ export function MovementsTable({
             </>
           ),
           trailing: (
-            <div className="text-[13px] font-semibold tabular-nums">
+            <div className="text-[14.5px] font-semibold tabular-nums">
               {formatQuantity(m.quantity, unitOf(m.unit), locale)}
             </div>
           ),

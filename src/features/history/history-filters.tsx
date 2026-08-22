@@ -44,56 +44,56 @@ export function HistoryFilters({ materials, foremen, users, projects, current }:
   ).length;
 
   const periodLabels: Record<string, string> = {
-    all: t.periods.all,
-    today: t.periods.today,
-    "7": t.periods.days7,
-    "30": t.periods.days30,
-    "90": t.periods.days90,
+    all: t("periods.all"),
+    today: t("periods.today"),
+    "7": t("periods.days7"),
+    "30": t("periods.days30"),
+    "90": t("periods.days90"),
   };
 
   const filters = [
     {
       key: "type",
-      placeholder: t.history.filters.type,
+      placeholder: t("history.filters.type"),
       options: [
-        { value: "all", label: t.history.filters.allTypes },
-        ...MOVEMENT_TYPES.map((type) => ({ value: type, label: t.movements[type] })),
+        { value: "all", label: t("history.filters.allTypes") },
+        ...MOVEMENT_TYPES.map((type) => ({ value: type, label: t(`movements.${type}`) })),
       ],
     },
     {
       key: "period",
-      placeholder: t.common.period,
+      placeholder: t("common.period"),
       options: PERIOD_KEYS.map((value) => ({ value, label: periodLabels[value] })),
     },
     {
       key: "materialId",
-      placeholder: t.operations.material,
+      placeholder: t("operations.material"),
       options: [
-        { value: "all", label: t.history.filters.allMaterials },
+        { value: "all", label: t("history.filters.allMaterials") },
         ...materials.map((m) => ({ value: m.id, label: m.name })),
       ],
     },
     {
       key: "foremanId",
-      placeholder: t.operations.foreman,
+      placeholder: t("operations.foreman"),
       options: [
-        { value: "all", label: t.history.filters.allForemen },
+        { value: "all", label: t("history.filters.allForemen") },
         ...foremen.map((f) => ({ value: f.id, label: f.name })),
       ],
     },
     {
       key: "projectId",
-      placeholder: t.operations.project,
+      placeholder: t("operations.project"),
       options: [
-        { value: "all", label: t.history.filters.allProjects },
+        { value: "all", label: t("history.filters.allProjects") },
         ...projects.map((p) => ({ value: p.id, label: p.name })),
       ],
     },
     {
       key: "userId",
-      placeholder: t.operations.employee,
+      placeholder: t("operations.employee"),
       options: [
-        { value: "all", label: t.history.filters.allUsers },
+        { value: "all", label: t("history.filters.allUsers") },
         ...users.map((u) => ({ value: u.id, label: u.fullName })),
       ],
     },
@@ -132,7 +132,7 @@ export function HistoryFilters({ materials, foremen, users, projects, current }:
           onClick={() => startTransition(() => router.replace("/history", { scroll: false }))}
         >
           <X className="h-3.5 w-3.5" />
-          {t.history.filters.resetWithCount(activeCount)}
+          {t("history.filters.resetWithCount", { n: activeCount })}
         </Button>
       )}
     </div>

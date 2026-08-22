@@ -2,11 +2,11 @@ import { PageHeader } from "@/shared/components/page-header";
 import { ForemenTable } from "@/features/foremen/foremen-table";
 import { ForemanFormDialog } from "@/features/foremen/foreman-form-dialog";
 import { getForemenSummaries, listForemen, listProjects } from "@/server/queries";
-import { getDictionary } from "@/i18n/server";
+import { getT } from "@/i18n/server";
 
 export default async function ForemenPage() {
   const [t, summaries, list, projects] = await Promise.all([
-    getDictionary(),
+    getT(),
     getForemenSummaries(),
     listForemen(),
     listProjects(),
@@ -27,8 +27,8 @@ export default async function ForemenPage() {
   return (
     <div>
       <PageHeader
-        title={t.foremen.title}
-        description={t.foremen.subtitle}
+        title={t("foremen.title")}
+        description={t("foremen.subtitle")}
         actions={<ForemanFormDialog projects={projects} />}
       />
       <ForemenTable foremen={foremen} />

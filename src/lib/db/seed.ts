@@ -1,13 +1,11 @@
 import "@/lib/server-only";
 
-import { randomUUID } from "node:crypto";
-
-import { queryAll, queryOne, transaction } from "./client";
+import { db, transaction } from "./client";
 import { createRng, pick, randInt } from "./rng";
 import { MATERIALS_SEED } from "./seed-materials";
 import { FOREMEN_SEED, PROJECTS_SEED, SUPPLIERS_SEED, USERS_SEED } from "./seed-people";
 import { hashPassword } from "@/lib/auth/password";
-import { recordMovementInTx } from "@/server/movements";
+import { recordMovement } from "@/server/movements";
 import { BusinessError } from "@/server/errors";
 import type { Unit } from "@/types";
 
@@ -70,8 +68,7 @@ function roundForUnit(unit: string, value: number): number {
 const DAYS_OF_HISTORY = 45;
 
 export async function isDatabaseSeeded(): Promise<boolean> {
-  const row = await queryOne<{ c: number }>("SELECT COUNT(*)::int AS c FROM users");
-  return (row?.c ?? 0) > 0;
+  return (await db.user.count()) > 0;
 }
 
 export interface SeedOptions {
@@ -98,124 +95,124 @@ export interface SeedResult {
  * согласованы с журналом движений — никаких «нарисованных» чисел.
  */
 export async function seedDatabase(options: SeedOptions = {}): Promise<SeedResult> {
-  return transaction(async (tx) => {
+  const rng = createRng(20260821);
+
+  const base = await transaction(async (tx) => {
     if (options.reset) {
       // Порядок важен: сначала зависимые таблицы, потом справочники.
-      for (const table of [
-        "stock_movements",
-        "foreman_stock",
-        "sessions",
-        "foremen",
-        "materials",
-        "projects",
-        "suppliers",
-        "users",
-        "settings",
-      ]) {
-        await tx.run(`DELETE FROM ${table}`);
-      }
+      // Порядок важен: сначала зависимые таблицы, потом справочники.
+      await tx.stockMovement.deleteMany();
+      await tx.foremanStock.deleteMany();
+      await tx.session.deleteMany();
+      await tx.foreman.deleteMany();
+      await tx.material.deleteMany();
+      await tx.project.deleteMany();
+      await tx.supplier.deleteMany();
+      await tx.user.deleteMany();
+      await tx.setting.deleteMany();
     }
 
-    const now = new Date().toISOString();
-    const rng = createRng(20260821);
 
     /* --- Учётные записи ------------------------------------------------ */
     const userIds: string[] = [];
     for (const user of USERS_SEED) {
-      const id = randomUUID();
-      await tx.run(
-        `INSERT INTO users (id, username, password_hash, full_name, position, phone, role, is_active, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
-        id,
-        user.username,
-        hashPassword(user.password),
-        user.fullName,
-        user.position,
-        user.phone,
-        user.role,
-        now
-      );
-      userIds.push(id);
+      const created = await tx.user.create({
+        data: {
+          username: user.username,
+          passwordHash: hashPassword(user.password),
+          fullName: user.fullName,
+          position: user.position,
+          phone: user.phone,
+          role: user.role,
+        },
+        select: { id: true },
+      });
+      userIds.push(created.id);
     }
 
     /* --- Объекты ------------------------------------------------------- */
     const projectIds: string[] = [];
     for (const project of PROJECTS_SEED) {
-      const id = randomUUID();
-      await tx.run(
-        "INSERT INTO projects (id, name, address, is_active, created_at) VALUES (?, ?, ?, 1, ?)",
-        id,
-        project.name,
-        project.address,
-        now
-      );
-      projectIds.push(id);
+      const created = await tx.project.create({
+        data: { name: project.name, address: project.address },
+        select: { id: true },
+      });
+      projectIds.push(created.id);
     }
 
     /* --- Поставщики ---------------------------------------------------- */
     const supplierIds: string[] = [];
     for (const supplier of SUPPLIERS_SEED) {
-      const id = randomUUID();
-      await tx.run(
-        "INSERT INTO suppliers (id, name, contact, is_active, created_at) VALUES (?, ?, ?, 1, ?)",
-        id,
-        supplier.name,
-        supplier.contact,
-        now
-      );
-      supplierIds.push(id);
+      const created = await tx.supplier.create({
+        data: { name: supplier.name, contact: supplier.contact },
+        select: { id: true },
+      });
+      supplierIds.push(created.id);
     }
 
     /* --- Бригадиры ----------------------------------------------------- */
     const foremanIds: string[] = [];
     const foremanProject = new Map<string, string>();
     for (const foreman of FOREMEN_SEED) {
-      const id = randomUUID();
       const projectId = projectIds[foreman.projectIndex] ?? null;
-      await tx.run(
-        "INSERT INTO foremen (id, name, phone, brigade, project_id, is_active, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)",
-        id,
-        foreman.name,
-        foreman.phone,
-        foreman.brigade,
-        projectId,
-        now
-      );
-      foremanIds.push(id);
-      if (projectId) foremanProject.set(id, projectId);
+      const created = await tx.foreman.create({
+        data: {
+          name: foreman.name,
+          phone: foreman.phone,
+          brigade: foreman.brigade,
+          projectId,
+        },
+        select: { id: true },
+      });
+      foremanIds.push(created.id);
+      if (projectId) foremanProject.set(created.id, projectId);
     }
 
     /* --- Материалы ----------------------------------------------------- */
     const materialIds: string[] = [];
     const materialById = new Map<string, { unit: string; minStock: number }>();
-    const createdAt = new Date(Date.now() - DAYS_OF_HISTORY * 86_400_000).toISOString();
+    const createdAt = new Date(Date.now() - DAYS_OF_HISTORY * 86_400_000);
     for (const material of MATERIALS_SEED) {
-      const id = randomUUID();
-      await tx.run(
-        `INSERT INTO materials (id, name, category, unit, quantity, min_stock, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 0, ?, 1, ?, ?)`,
-        id,
-        material.name,
-        material.category,
-        material.unit,
-        material.minStock,
-        createdAt,
-        createdAt
-      );
-      materialIds.push(id);
-      materialById.set(id, { unit: material.unit, minStock: material.minStock });
+      const created = await tx.material.create({
+        data: {
+          name: material.name,
+          category: material.category,
+          unit: material.unit,
+          quantity: 0,
+          minStock: material.minStock,
+          createdAt,
+        },
+        select: { id: true },
+      });
+      materialIds.push(created.id);
+      materialById.set(created.id, { unit: material.unit, minStock: material.minStock });
     }
 
-    const base: SeedResult = {
-      users: userIds.length,
-      projects: projectIds.length,
-      suppliers: supplierIds.length,
-      foremen: foremanIds.length,
-      materials: materialIds.length,
-      movements: 0,
+    return {
+      userIds,
+      projectIds,
+      supplierIds,
+      foremanIds,
+      foremanProject,
+      materialIds,
+      materialById,
     };
+  });
 
-    if (options.skipHistory) return base;
+  const { userIds, projectIds, supplierIds, foremanIds, foremanProject, materialIds, materialById } =
+    base;
+
+  const result: SeedResult = {
+    users: userIds.length,
+    projects: projectIds.length,
+    suppliers: supplierIds.length,
+    foremen: foremanIds.length,
+    materials: materialIds.length,
+    movements: 0,
+  };
+
+  {
+    if (options.skipHistory) return result;
 
     /* --- История движений ---------------------------------------------- */
     const today = new Date();
@@ -226,9 +223,12 @@ export async function seedDatabase(options: SeedOptions = {}): Promise<SeedResul
     const atForeman = new Map<string, number>(); // ключ: `${foremanId}:${materialId}`
 
     let movements = 0;
-    const record = async (input: Parameters<typeof recordMovementInTx>[1]) => {
+    // Каждое движение пишется своей транзакцией: одна общая транзакция на
+    // сотни операций по сети упирается в таймаут, а по отдельности каждая
+    // операция остаётся неделимой — этого и требует учёт.
+    const record = async (input: Parameters<typeof recordMovement>[0]) => {
       try {
-        await recordMovementInTx(tx, input);
+        await recordMovement(input);
         movements++;
         return true;
       } catch (error) {
@@ -369,19 +369,16 @@ export async function seedDatabase(options: SeedOptions = {}): Promise<SeedResul
       }
     }
 
-    await tx.run(
-      "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-      "company_name",
-      "Gagarin Avenue"
-    );
-    await tx.run(
-      "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-      "warehouse_address",
-      "Toshkent sh., Gagarin ko'chasi, 12"
-    );
+    for (const [key, value] of [
+      ["company_name", "Gagarin Avenue"],
+      ["warehouse_address", "Toshkent sh., Gagarin ko'chasi, 12"],
+    ] as const) {
+      await db.setting.upsert({ where: { key }, create: { key, value }, update: { value } });
+    }
 
-    return { ...base, movements };
-  });
+    result.movements = movements;
+    return result;
+  }
 }
 
 /** Заполняет базу при первом запуске, если она пустая. */
@@ -393,17 +390,14 @@ export async function ensureSeeded(): Promise<void> {
 
 /** Диагностика для скриптов: сводка по содержимому базы. */
 export async function describeDatabase(): Promise<Record<string, number>> {
-  const tables = ["users", "projects", "suppliers", "foremen", "materials", "stock_movements", "foreman_stock"];
-  const result: Record<string, number> = {};
-  for (const table of tables) {
-    result[table] = (await queryOne<{ c: number }>(`SELECT COUNT(*)::int AS c FROM ${table}`))?.c ?? 0;
-  }
-  return result;
-}
-
-export async function listTableNames(): Promise<string[]> {
-  const rows = await queryAll<{ name: string }>(
-    "SELECT tablename AS name FROM pg_tables WHERE schemaname = 'public'"
-  );
-  return rows.map((r) => r.name);
+  const [users, projects, suppliers, foremen, materials, movements, foremanStock] = await Promise.all([
+    db.user.count(),
+    db.project.count(),
+    db.supplier.count(),
+    db.foreman.count(),
+    db.material.count(),
+    db.stockMovement.count(),
+    db.foremanStock.count(),
+  ]);
+  return { users, projects, suppliers, foremen, materials, movements, foremanStock };
 }

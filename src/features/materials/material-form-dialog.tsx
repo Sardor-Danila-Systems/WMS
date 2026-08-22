@@ -10,7 +10,7 @@ import { saveMaterial } from "@/app/actions/catalog";
 import { materialSchema } from "@/lib/validation";
 import { CATEGORIES, UNITS } from "@/constants/categories";
 import { useT } from "@/i18n/client";
-import { translateValue } from "@/i18n";
+import { useValueTranslator } from "@/i18n/values";
 import { FormField } from "@/shared/components/form-field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,8 @@ export function MaterialFormDialog({
   hasHistory?: boolean;
 }) {
   const t = useT();
+  const unitLabel = useValueTranslator("units");
+  const categoryLabel = useValueTranslator("categories");
   const [open, setOpen] = useState(false);
   const isEdit = Boolean(material);
 
@@ -61,7 +63,7 @@ export function MaterialFormDialog({
   const { submit, isPending } = useActionSubmit<Values>({
     action: saveMaterial,
     setError,
-    successTitle: isEdit ? t.materials.saved : t.materials.created,
+    successTitle: isEdit ? t("materials.saved") : t("materials.created"),
     onSuccess: () => {
       setOpen(false);
       if (!isEdit) reset();
@@ -82,19 +84,19 @@ export function MaterialFormDialog({
             size="sm"
             variant={isEdit ? "outline" : "default"}
             className="gap-1.5"
-            aria-label={isEdit ? t.common.edit : undefined}
+            aria-label={isEdit ? t("common.edit") : undefined}
           />
         }
       >
         {isEdit ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-        {isEdit ? t.common.edit : t.materials.add}
+        {isEdit ? t("common.edit") : t("materials.add")}
       </DialogTrigger>
 
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isEdit ? t.materials.edit : t.materials.create}</DialogTitle>
+          <DialogTitle>{isEdit ? t("materials.edit") : t("materials.create")}</DialogTitle>
           <DialogDescription>
-{isEdit ? t.materials.editHint : t.materials.createHint}
+{isEdit ? t("materials.editHint") : t("materials.createHint")}
           </DialogDescription>
         </DialogHeader>
 
@@ -102,9 +104,9 @@ export function MaterialFormDialog({
           onSubmit={handleSubmit((values) => submit({ ...values, id: material?.id }))}
           className="space-y-4"
         >
-          <FormField label={t.materials.name} required error={errors.name?.message}>
+          <FormField label={t("materials.name")} required error={errors.name?.message}>
             <Input
-              placeholder={t.materials.namePlaceholder}
+              placeholder={t("materials.namePlaceholder")}
               autoFocus
               disabled={isPending}
               aria-invalid={Boolean(errors.name)}
@@ -116,34 +118,34 @@ export function MaterialFormDialog({
             <SelectField
               control={control}
               name="category"
-              label={t.materials.category}
-              placeholder={t.materials.categoryPlaceholder}
+              label={t("materials.category")}
+              placeholder={t("materials.categoryPlaceholder")}
               required
               error={errors.category?.message}
               disabled={isPending}
-              options={CATEGORIES.map((c) => ({ value: c, label: translateValue(t.categories, c) }))}
+              options={CATEGORIES.map((c) => ({ value: c, label: categoryLabel(c) }))}
             />
 
             <SelectField
               control={control}
               name="unit"
-              label={t.materials.unit}
-              placeholder={t.materials.unitPlaceholder}
+              label={t("materials.unit")}
+              placeholder={t("materials.unitPlaceholder")}
               required
               error={errors.unit?.message}
               disabled={isPending || hasHistory}
-              options={UNITS.map((u) => ({ value: u, label: translateValue(t.units, u) }))}
+              options={UNITS.map((u) => ({ value: u, label: unitLabel(u) }))}
             >
               {hasHistory && (
-                <p className="text-xs text-muted-foreground">
-{t.materials.unitLocked}
+                <p className="text-[13px] text-muted-foreground">
+{t("materials.unitLocked")}
                 </p>
               )}
             </SelectField>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label={t.materials.minStock} required error={errors.minStock?.message}>
+            <FormField label={t("materials.minStock")} required error={errors.minStock?.message}>
               <Input
                 type="number"
                 step="any"
@@ -156,7 +158,7 @@ export function MaterialFormDialog({
             </FormField>
 
             {!isEdit && (
-              <FormField label={t.materials.initialQuantity} error={errors.initialQuantity?.message}>
+              <FormField label={t("materials.initialQuantity")} error={errors.initialQuantity?.message}>
                 <Input
                   type="number"
                   step="any"
@@ -171,7 +173,7 @@ export function MaterialFormDialog({
 
           <DialogFooter>
             <Button type="submit" disabled={isPending}>
-              {isPending ? t.common.saving : isEdit ? t.common.save : t.materials.add}
+              {isPending ? t("common.saving") : isEdit ? t("common.save") : t("materials.add")}
             </Button>
           </DialogFooter>
         </form>

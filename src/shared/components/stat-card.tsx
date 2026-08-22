@@ -30,14 +30,14 @@ export function StatCard({ label, value, icon: Icon, hint, tone = "neutral" }: S
     <div className="rounded-lg border border-border bg-card px-4 py-3.5">
       <div className="flex items-center gap-2">
         <Icon className={cn("h-4 w-4 shrink-0", styles.icon)} />
-        <span className="truncate text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+        <span className="truncate text-[12.5px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
           {label}
         </span>
       </div>
-      <div className={cn("mt-2 text-[26px] font-semibold leading-none tracking-tight tabular-nums", styles.value)}>
+      <div className={cn("mt-2 text-[30px] font-semibold leading-none tracking-tight tabular-nums", styles.value)}>
         {value}
       </div>
-      {hint && <div className="mt-1.5 line-clamp-1 text-xs text-muted-foreground">{hint}</div>}
+      {hint && <div className="mt-1.5 line-clamp-1 text-[13px] text-muted-foreground">{hint}</div>}
     </div>
   );
 }

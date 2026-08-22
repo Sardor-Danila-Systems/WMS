@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { Languages } from "lucide-react";
 
 import { setLocale } from "@/app/actions/locale";
-import { useI18n } from "@/i18n/client";
+import { useIntlTag, useT } from "@/i18n/client";
 import { LOCALES, type Locale } from "@/i18n/types";
 import { cn } from "@/lib/utils";
 
@@ -15,13 +15,14 @@ const LABELS: Record<Locale, string> = { ru: "RU", uz: "UZ" };
  * языков всего два, и выбор должен делаться одним касанием.
  */
 export function LanguageSwitch({ className }: { className?: string }) {
-  const { locale, t } = useI18n();
+  const t = useT();
+  const locale = useIntlTag();
   const [isPending, startTransition] = useTransition();
 
   return (
     <div
       role="group"
-      aria-label={t.nav.language}
+      aria-label={t("nav.language")}
       className={cn(
         "inline-flex items-center rounded-md border border-border bg-card p-0.5",
         isPending && "opacity-60",
@@ -37,7 +38,7 @@ export function LanguageSwitch({ className }: { className?: string }) {
           aria-pressed={code === locale}
           onClick={() => startTransition(() => setLocale(code))}
           className={cn(
-            "rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors",
+            "rounded-[5px] px-2 py-1 text-[12.5px] font-medium transition-colors",
             code === locale
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"

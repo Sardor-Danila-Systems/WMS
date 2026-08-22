@@ -49,7 +49,7 @@ export function ProjectFormDialog({ project }: { project?: Project }) {
   const { submit, isPending } = useActionSubmit<Values>({
     action: saveProject,
     setError,
-    successTitle: isEdit ? t.projects.saved : t.projects.created,
+    successTitle: isEdit ? t("projects.saved") : t("projects.created"),
     onSuccess: () => {
       setOpen(false);
       if (!isEdit) reset();
@@ -62,14 +62,14 @@ export function ProjectFormDialog({ project }: { project?: Project }) {
         render={<Button size="sm" variant={isEdit ? "outline" : "default"} className="gap-1.5" />}
       >
         {isEdit ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-        {isEdit ? t.common.edit : t.projects.add}
+        {isEdit ? t("common.edit") : t("projects.add")}
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEdit ? t.projects.edit : t.projects.create}</DialogTitle>
+          <DialogTitle>{isEdit ? t("projects.edit") : t("projects.create")}</DialogTitle>
           <DialogDescription>
-            {t.projects.hint}
+            {t("projects.hint")}
           </DialogDescription>
         </DialogHeader>
 
@@ -77,9 +77,9 @@ export function ProjectFormDialog({ project }: { project?: Project }) {
           onSubmit={handleSubmit((values) => submit({ ...values, id: project?.id }))}
           className="space-y-4"
         >
-          <FormField label={t.projects.name} required error={errors.name?.message}>
+          <FormField label={t("projects.name")} required error={errors.name?.message}>
             <Input
-              placeholder={t.projects.namePlaceholder}
+              placeholder={t("projects.namePlaceholder")}
               autoFocus
               disabled={isPending}
               aria-invalid={Boolean(errors.name)}
@@ -87,27 +87,27 @@ export function ProjectFormDialog({ project }: { project?: Project }) {
             />
           </FormField>
 
-          <FormField label={t.projects.address} error={errors.address?.message}>
-            <Input placeholder={t.projects.addressPlaceholder} disabled={isPending} {...register("address")} />
+          <FormField label={t("projects.address")} error={errors.address?.message}>
+            <Input placeholder={t("projects.addressPlaceholder")} disabled={isPending} {...register("address")} />
           </FormField>
 
           {isEdit && (
-            <FormField label={t.common.status}>
-              <label className="flex items-center gap-2 text-sm">
+            <FormField label={t("common.status")}>
+              <label className="flex items-center gap-2 text-[15px]">
                 <input
                   type="checkbox"
                   className="h-4 w-4 rounded border-input accent-primary"
                   disabled={isPending}
                   {...register("isActive")}
                 />
-                {t.projects.activeLabel}
+                {t("projects.activeLabel")}
               </label>
             </FormField>
           )}
 
           <DialogFooter>
             <Button type="submit" disabled={isPending}>
-              {isPending ? t.common.saving : isEdit ? t.common.save : t.common.add}
+              {isPending ? t("common.saving") : isEdit ? t("common.save") : t("common.add")}
             </Button>
           </DialogFooter>
         </form>

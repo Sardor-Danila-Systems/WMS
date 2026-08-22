@@ -13,9 +13,9 @@ export function EmptyState({ message, description, icon: Icon = Inbox }: EmptySt
       <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted">
         <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
-      <p className="text-[13px] font-medium text-foreground">{message}</p>
+      <p className="text-[14.5px] font-medium text-foreground">{message}</p>
       {description && (
-        <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">{description}</p>
+        <p className="max-w-xs text-[13px] leading-relaxed text-muted-foreground">{description}</p>
       )}
     </div>
   );

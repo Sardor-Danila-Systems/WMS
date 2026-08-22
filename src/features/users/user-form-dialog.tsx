@@ -66,7 +66,7 @@ export function UserFormDialog({ user }: { user?: User }) {
   const { submit, isPending } = useActionSubmit<Values>({
     action: saveUser,
     setError,
-    successTitle: isEdit ? t.users.saved : t.users.created,
+    successTitle: isEdit ? t("users.saved") : t("users.created"),
     onSuccess: () => {
       setOpen(false);
       if (!isEdit) reset();
@@ -79,14 +79,14 @@ export function UserFormDialog({ user }: { user?: User }) {
         render={<Button size="sm" variant={isEdit ? "outline" : "default"} className="gap-1.5" />}
       >
         {isEdit ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-        {isEdit ? t.common.edit : t.users.add}
+        {isEdit ? t("common.edit") : t("users.add")}
       </DialogTrigger>
 
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isEdit ? t.users.edit : t.users.create}</DialogTitle>
+          <DialogTitle>{isEdit ? t("users.edit") : t("users.create")}</DialogTitle>
           <DialogDescription>
-            {t.users.hint}
+            {t("users.hint")}
           </DialogDescription>
         </DialogHeader>
 
@@ -95,9 +95,9 @@ export function UserFormDialog({ user }: { user?: User }) {
           className="space-y-4"
         >
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label={t.users.fullName} required error={errors.fullName?.message}>
+            <FormField label={t("users.fullName")} required error={errors.fullName?.message}>
               <Input
-                placeholder={t.users.namePlaceholder}
+                placeholder={t("users.namePlaceholder")}
                 autoFocus
                 disabled={isPending}
                 aria-invalid={Boolean(errors.fullName)}
@@ -105,24 +105,24 @@ export function UserFormDialog({ user }: { user?: User }) {
               />
             </FormField>
 
-            <FormField label={t.users.login} required={!isEdit} error={errors.username?.message}>
+            <FormField label={t("users.login")} required={!isEdit} error={errors.username?.message}>
               <Input
-                placeholder={t.users.loginPlaceholder}
+                placeholder={t("users.loginPlaceholder")}
                 autoComplete="off"
                 disabled={isPending || isEdit}
                 aria-invalid={Boolean(errors.username)}
                 {...register("username")}
               />
-              {isEdit && <p className="text-xs text-muted-foreground">{t.users.loginLocked}</p>}
+              {isEdit && <p className="text-[13px] text-muted-foreground">{t("users.loginLocked")}</p>}
             </FormField>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label={t.users.position} error={errors.position?.message}>
-              <Input placeholder={t.users.positionPlaceholder} disabled={isPending} {...register("position")} />
+            <FormField label={t("users.position")} error={errors.position?.message}>
+              <Input placeholder={t("users.positionPlaceholder")} disabled={isPending} {...register("position")} />
             </FormField>
 
-            <FormField label={t.users.phone} error={errors.phone?.message}>
+            <FormField label={t("users.phone")} error={errors.phone?.message}>
               <Input placeholder="+7 (900) 000-00-00" disabled={isPending} {...register("phone")} />
             </FormField>
           </div>
@@ -130,31 +130,31 @@ export function UserFormDialog({ user }: { user?: User }) {
           <SelectField
             control={control}
             name="role"
-            label={t.roles.title}
-            placeholder={t.users.rolePlaceholder}
+            label={t("roles.title")}
+            placeholder={t("users.rolePlaceholder")}
             required
             error={errors.role?.message}
             disabled={isPending}
             options={roleOptions.map((role) => ({
               value: role,
-              label: t.roles[role],
-              hint: role === "ADMIN" ? t.users.roleFullAccess : t.users.roleOperations,
+              label: t(`roles.${role}`),
+              hint: role === "ADMIN" ? t("users.roleFullAccess") : t("users.roleOperations"),
             }))}
           >
-            <p className="text-xs text-muted-foreground">
-              {t.roles.descriptions.WAREHOUSE_WORKER}
+            <p className="text-[13px] text-muted-foreground">
+              {t("roles.descriptions.WAREHOUSE_WORKER")}
             </p>
           </SelectField>
 
           <FormField
-            label={isEdit ? t.users.newPassword : t.auth.password}
+            label={isEdit ? t("users.newPassword") : t("auth.password")}
             required={!isEdit}
             error={errors.password?.message}
           >
             <Input
               type="password"
               autoComplete="new-password"
-              placeholder={isEdit ? t.users.passwordKeep : t.users.passwordMin}
+              placeholder={isEdit ? t("users.passwordKeep") : t("users.passwordMin")}
               disabled={isPending}
               aria-invalid={Boolean(errors.password)}
               {...register("password")}
@@ -162,22 +162,22 @@ export function UserFormDialog({ user }: { user?: User }) {
           </FormField>
 
           {isEdit && (
-            <FormField label={t.users.accessLabel}>
-              <label className="flex items-center gap-2 text-sm">
+            <FormField label={t("users.accessLabel")}>
+              <label className="flex items-center gap-2 text-[15px]">
                 <input
                   type="checkbox"
                   className="h-4 w-4 rounded border-input accent-primary"
                   disabled={isPending}
                   {...register("isActive")}
                 />
-                {t.users.activeLabel}
+                {t("users.activeLabel")}
               </label>
             </FormField>
           )}
 
           <DialogFooter>
             <Button type="submit" disabled={isPending}>
-              {isPending ? t.common.saving : isEdit ? t.common.save : t.common.add}
+              {isPending ? t("common.saving") : isEdit ? t("common.save") : t("common.add")}
             </Button>
           </DialogFooter>
         </form>

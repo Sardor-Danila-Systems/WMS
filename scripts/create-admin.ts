@@ -2,7 +2,7 @@
  * Создаёт администратора в пустой базе (или меняет пароль существующему).
  *   npm run db:create-admin -- <логин> <пароль> "<ФИО>"
  */
-import { getPool, queryOne } from "@/lib/db/client";
+import { db, getPrisma } from "@/lib/db/client";
 import { createUser, updateUser } from "@/server/catalog";
 
 const [username, password, fullName] = process.argv.slice(2);
@@ -16,10 +16,10 @@ if (password.length < 6) {
   process.exit(1);
 }
 
-const existing = await queryOne<{ id: string }>(
-  "SELECT id FROM users WHERE lower(username) = lower(?)",
-  username
-);
+const existing = await db.user.findFirst({
+  where: { username: { equals: username, mode: "insensitive" } },
+  select: { id: true },
+});
 
 if (existing) {
   await updateUser(existing.id, {
@@ -44,4 +44,4 @@ if (existing) {
 }
 
 console.log("Теперь можно войти в систему этим логином.");
-await getPool().end();
+await getPrisma().$disconnect();

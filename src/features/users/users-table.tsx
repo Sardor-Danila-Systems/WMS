@@ -2,7 +2,7 @@
 
 import { DataTable, type DataTableColumn } from "@/shared/components/data-table";
 import { Badge } from "@/components/ui/badge";
-import { useI18n } from "@/i18n/client";
+import { useIntlTag, useT } from "@/i18n/client";
 import { formatDate } from "@/lib/format";
 import type { User } from "@/types";
 import { UserFormDialog } from "./user-form-dialog";
@@ -12,22 +12,23 @@ export interface UserRowData extends User {
 }
 
 export function UsersTable({ users }: { users: UserRowData[] }) {
-  const { t, locale } = useI18n();
+  const t = useT();
+  const locale = useIntlTag();
   const columns: DataTableColumn<UserRowData>[] = [
     {
       id: "name",
-      header: t.users.title,
+      header: t("users.title"),
       accessor: (u) => (
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium">{u.fullName}</span>
             {!u.isActive && (
-              <Badge variant="outline" className="shrink-0 text-[10px]">
-                {t.users.disabled}
+              <Badge variant="outline" className="shrink-0 text-[11px]">
+                {t("users.disabled")}
               </Badge>
             )}
           </div>
-          <div className="truncate text-xs text-muted-foreground">
+          <div className="truncate text-[13px] text-muted-foreground">
             @{u.username}
             {u.position ? ` · ${u.position}` : ""}
           </div>
@@ -37,7 +38,7 @@ export function UsersTable({ users }: { users: UserRowData[] }) {
     },
     {
       id: "role",
-      header: t.roles.title,
+      header: t("roles.title"),
       accessor: (u) => (
         <Badge
           variant="outline"
@@ -47,19 +48,19 @@ export function UsersTable({ users }: { users: UserRowData[] }) {
               : "border-border bg-muted/60 text-muted-foreground"
           }
         >
-          {t.roles[u.role]}
+          {t(`roles.${u.role}`)}
         </Badge>
       ),
       sortValue: (u) => u.role,
     },
     {
       id: "phone",
-      header: t.users.phone,
+      header: t("users.phone"),
       accessor: (u) => <span className="whitespace-nowrap text-muted-foreground">{u.phone || "—"}</span>,
     },
     {
       id: "operations",
-      header: t.users.operationsCount,
+      header: t("users.operationsCount"),
       accessor: (u) => <span className="tabular-nums">{u.operationCount}</span>,
       sortValue: (u) => u.operationCount,
       className: "text-right",
@@ -67,7 +68,7 @@ export function UsersTable({ users }: { users: UserRowData[] }) {
     },
     {
       id: "created",
-      header: t.users.since,
+      header: t("users.since"),
       accessor: (u) => (
         <span className="whitespace-nowrap text-muted-foreground">{formatDate(u.createdAt, locale)}</span>
       ),
@@ -87,7 +88,7 @@ export function UsersTable({ users }: { users: UserRowData[] }) {
       data={users}
       rowKey={(u) => u.id}
       pageSize={12}
-      emptyMessage={t.users.notFound}
+      emptyMessage={t("users.notFound")}
       mobileCard={(u) => ({
         title: u.fullName,
         subtitle: `@${u.username}${u.position ? ` · ${u.position}` : ""}`,

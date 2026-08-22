@@ -10,23 +10,21 @@
  * без неё все восемь транзакций прочитали бы остаток 100 одновременно
  * и списали бы 240 единиц из имеющихся 100.
  */
-import { getPool, queryOne } from "@/lib/db/client";
-import { SCHEMA_SQL } from "@/lib/db/schema";
+import { db, getPrisma } from "@/lib/db/client";
 import { seedDatabase } from "@/lib/db/seed";
 import { recordMovement, verifyLedgerConsistency } from "@/server/movements";
 import { createForeman, createMaterial } from "@/server/catalog";
 import { getMaterial } from "@/server/queries";
 import { BusinessError } from "@/server/errors";
 
-await getPool().query(SCHEMA_SQL);
 await seedDatabase({ reset: true, skipHistory: true });
 
-const admin = (await queryOne<{ id: string }>("SELECT id FROM users WHERE username = 'admin'"))!;
+const admin = await db.user.findUniqueOrThrow({ where: { username: "admin" }, select: { id: true } });
 
 // Оставляем ровно один материал и одного бригадира, чтобы все транзакции
 // боролись за одну и ту же строку.
-await getPool().query("DELETE FROM materials");
-await getPool().query("DELETE FROM foremen");
+await db.material.deleteMany();
+await db.foreman.deleteMany();
 
 const { id: materialId } = await createMaterial({
   name: "Дефицитный материал",
@@ -70,9 +68,7 @@ const succeeded = attempts.filter((r) => r === "OK").length;
 const rejected = attempts.filter((r) => r === "REJECTED").length;
 
 const remaining = (await getMaterial(materialId))!.quantity;
-const issued = (await queryOne<{ c: number }>(
-  "SELECT COUNT(*)::int AS c FROM stock_movements WHERE type = 'ISSUE'"
-))!.c;
+const issued = await db.stockMovement.count({ where: { type: "ISSUE" } });
 const consistency = await verifyLedgerConsistency();
 
 let failed = 0;
@@ -93,5 +89,5 @@ check("остаток не отрицательный", remaining >= 0, true);
 check("журнал сходится с остатками", consistency.ok, true);
 
 console.log(`\n${failed === 0 ? "✓ Одновременная работа безопасна" : "✗ Обнаружена гонка"}`);
-await getPool().end();
+await getPrisma().$disconnect();
 process.exit(failed === 0 ? 0 : 1);

@@ -1,6 +1,5 @@
 import { formatQuantity } from "@/lib/format";
-import { translateValue } from "@/i18n";
-import type { Dictionary, Locale } from "@/i18n/types";
+import type { LooseTranslate } from "@/i18n/loose";
 
 /** Коды бизнес-ошибок без параметров. */
 export type SimpleErrorCode =
@@ -58,49 +57,26 @@ export class BusinessError extends Error {
 /** Переводит ошибку в сообщение для пользователя. */
 export function toActionError(
   error: unknown,
-  dict: Dictionary,
-  locale: Locale
+  t: LooseTranslate,
+  intlTag: string,
+  unitLabel: (unit: string) => string
 ): { error: string; field?: string } {
   if (error instanceof BusinessError) {
-    const messages = dict.errors;
-
     if (error.amount) {
-      const available = formatQuantity(
-        error.amount.value,
-        translateValue(dict.units, error.amount.unit),
-        locale
-      );
-      switch (error.code) {
-        case "INSUFFICIENT_STOCK":
-          return { error: messages.INSUFFICIENT_STOCK(available), field: error.field };
-        case "INSUFFICIENT_FOREMAN_STOCK_RETURN":
-          return {
-            error: messages.INSUFFICIENT_FOREMAN_STOCK_RETURN(available),
-            field: error.field,
-          };
-        case "INSUFFICIENT_FOREMAN_STOCK_USAGE":
-          return {
-            error: messages.INSUFFICIENT_FOREMAN_STOCK_USAGE(available),
-            field: error.field,
-          };
-      }
+      const available = formatQuantity(error.amount.value, unitLabel(error.amount.unit), intlTag);
+      return { error: t(`errors.${error.code}`, { available }), field: error.field };
     }
-
-    const message = messages[error.code as SimpleErrorCode];
-    return { error: typeof message === "string" ? message : messages.UNKNOWN, field: error.field };
+    return { error: t(`errors.${error.code}`), field: error.field };
   }
 
   // Нарушение ограничений базы — последний рубеж защиты целостности.
-  if (error instanceof Error && /violates check constraint/i.test(error.message)) {
-    return { error: dict.errors.CONSTRAINT };
-  }
-  if (error instanceof Error && /duplicate key value/i.test(error.message)) {
-    return { error: dict.errors.DUPLICATE };
-  }
-  if (error instanceof Error && /violates foreign key constraint/i.test(error.message)) {
-    return { error: dict.errors.IN_USE };
+  const message = error instanceof Error ? error.message : "";
+  if (/violates check constraint/i.test(message)) return { error: t("errors.CONSTRAINT") };
+  if (/duplicate key value|Unique constraint/i.test(message)) return { error: t("errors.DUPLICATE") };
+  if (/violates foreign key constraint|Foreign key constraint/i.test(message)) {
+    return { error: t("errors.IN_USE") };
   }
 
   console.error("[wms] Непредвиденная ошибка операции:", error);
-  return { error: dict.errors.UNKNOWN };
+  return { error: t("errors.UNKNOWN") };
 }

@@ -54,7 +54,7 @@ export function ConfirmDialog({
       toast.success(successMessage);
       onOpenChange(false);
     } catch {
-      toast.error(t.common.serverUnavailable);
+      toast.error(t("common.serverUnavailable"));
     } finally {
       setIsPending(false);
     }
@@ -73,10 +73,10 @@ export function ConfirmDialog({
         {children}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
-            {t.common.cancel}
+            {t("common.cancel")}
           </Button>
           <Button variant="destructive" onClick={handleConfirm} disabled={isPending}>
-            {isPending ? t.common.deleting : (confirmLabel ?? t.common.delete)}
+            {isPending ? t("common.deleting") : (confirmLabel ?? t("common.delete"))}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -12,8 +12,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { exportToCsv, exportToXlsx } from "@/lib/export";
 import { formatQuantity } from "@/lib/format";
 import { getStockStatus } from "@/constants/colors";
-import { useI18n } from "@/i18n/client";
-import { translateValue } from "@/i18n";
+import { useIntlTag, useT } from "@/i18n/client";
+import { useValueTranslator } from "@/i18n/values";
 import { StockStatusBadge } from "@/shared/components/status-badge";
 import type {
   ForemanReportRow,
@@ -39,49 +39,52 @@ export function ReportsView({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
-  const { t, locale } = useI18n();
-  const unitOf = (unit: string) => translateValue(t.units, unit);
+  const t = useT();
+  const unitLabel = useValueTranslator("units");
+  const categoryLabel = useValueTranslator("categories");
+  const locale = useIntlTag();
+  const unitOf = (unit: string) => unitLabel(unit);
 
   const periodLabels: Record<string, string> = {
-    all: t.periods.all,
-    "7": t.periods.days7,
-    "30": t.periods.days30,
-    "90": t.periods.days90,
+    all: t("periods.all"),
+    "7": t("periods.days7"),
+    "30": t("periods.days30"),
+    "90": t("periods.days90"),
   };
 
   const STOCK_HEADERS = [
-    t.operations.material,
-    t.materials.category,
-    t.materials.unit,
-    t.materials.atWarehouse,
-    t.materials.atForemen,
-    t.common.total,
-    t.materials.minStockShort,
-    t.common.status,
-    t.reports.stock.received,
-    t.reports.stock.issued,
-    t.reports.stock.used,
-    t.reports.stock.returned,
+    t("operations.material"),
+    t("materials.category"),
+    t("materials.unit"),
+    t("materials.atWarehouse"),
+    t("materials.atForemen"),
+    t("common.total"),
+    t("materials.minStockShort"),
+    t("common.status"),
+    t("reports.stock.received"),
+    t("reports.stock.issued"),
+    t("reports.stock.used"),
+    t("reports.stock.returned"),
   ];
   const FOREMAN_HEADERS = [
-    t.operations.foreman,
-    t.foremen.brigade,
-    t.operations.project,
-    t.operations.material,
-    t.materials.unit,
-    t.foremen.detail.received,
-    t.foremen.detail.used,
-    t.foremen.detail.returned,
-    t.foremen.detail.onHand,
+    t("operations.foreman"),
+    t("foremen.brigade"),
+    t("operations.project"),
+    t("operations.material"),
+    t("materials.unit"),
+    t("foremen.detail.received"),
+    t("foremen.detail.used"),
+    t("foremen.detail.returned"),
+    t("foremen.detail.onHand"),
   ];
   const PROJECT_HEADERS = [
-    t.operations.project,
-    t.projects.address,
-    t.operations.material,
-    t.materials.unit,
-    t.projects.detail.issued,
-    t.projects.detail.used,
-    t.projects.detail.remaining,
+    t("operations.project"),
+    t("projects.address"),
+    t("operations.material"),
+    t("materials.unit"),
+    t("projects.detail.issued"),
+    t("projects.detail.used"),
+    t("projects.detail.remaining"),
   ];
 
   function setPeriod(value: string) {
@@ -95,13 +98,13 @@ export function ReportsView({
   const stockRows = () =>
     stock.map((r) => [
       r.materialName,
-      translateValue(t.categories, r.category),
+      categoryLabel(r.category),
       unitOf(r.unit),
       r.atWarehouse,
       r.atForemen,
       r.total,
       r.minStock,
-      t.stockStatus[getStockStatus(r.atWarehouse, r.minStock)],
+      t(`stockStatus.${getStockStatus(r.atWarehouse, r.minStock)}`),
       r.received,
       r.issued,
       r.used,
@@ -135,18 +138,18 @@ export function ReportsView({
   const stockColumns: DataTableColumn<StockReportRow>[] = [
     {
       id: "name",
-      header: t.operations.material,
+      header: t("operations.material"),
       accessor: (r) => (
         <div className="min-w-0">
           <div className="truncate font-medium">{r.materialName}</div>
-          <div className="truncate text-xs text-muted-foreground">{translateValue(t.categories, r.category)}</div>
+          <div className="truncate text-[13px] text-muted-foreground">{categoryLabel(r.category)}</div>
         </div>
       ),
       sortValue: (r) => r.materialName,
     },
     {
       id: "atWarehouse",
-      header: t.materials.atWarehouse,
+      header: t("materials.atWarehouse"),
       accessor: (r) => (
         <span className="whitespace-nowrap font-medium tabular-nums">
           {formatQuantity(r.atWarehouse, unitOf(r.unit), locale)}
@@ -158,7 +161,7 @@ export function ReportsView({
     },
     {
       id: "atForemen",
-      header: t.reports.stock.atForemen,
+      header: t("reports.stock.atForemen"),
       accessor: (r) => (
         <span className="whitespace-nowrap tabular-nums text-muted-foreground">
           {formatQuantity(r.atForemen, unitOf(r.unit), locale)}
@@ -170,7 +173,7 @@ export function ReportsView({
     },
     {
       id: "received",
-      header: t.reports.stock.received,
+      header: t("reports.stock.received"),
       accessor: (r) => (
         <span className="whitespace-nowrap tabular-nums text-blue-700">{formatQuantity(r.received, unitOf(r.unit), locale)}</span>
       ),
@@ -180,7 +183,7 @@ export function ReportsView({
     },
     {
       id: "issued",
-      header: t.reports.stock.issued,
+      header: t("reports.stock.issued"),
       accessor: (r) => (
         <span className="whitespace-nowrap tabular-nums text-orange-700">{formatQuantity(r.issued, unitOf(r.unit), locale)}</span>
       ),
@@ -190,7 +193,7 @@ export function ReportsView({
     },
     {
       id: "used",
-      header: t.reports.stock.used,
+      header: t("reports.stock.used"),
       accessor: (r) => (
         <span className="whitespace-nowrap tabular-nums text-teal-700">{formatQuantity(r.used, unitOf(r.unit), locale)}</span>
       ),
@@ -200,7 +203,7 @@ export function ReportsView({
     },
     {
       id: "returned",
-      header: t.reports.stock.returned,
+      header: t("reports.stock.returned"),
       accessor: (r) => (
         <span className="whitespace-nowrap tabular-nums text-violet-700">{formatQuantity(r.returned, unitOf(r.unit), locale)}</span>
       ),
@@ -210,7 +213,7 @@ export function ReportsView({
     },
     {
       id: "status",
-      header: t.common.status,
+      header: t("common.status"),
       accessor: (r) => <StockStatusBadge status={getStockStatus(r.atWarehouse, r.minStock)} />,
       sortValue: (r) => (r.minStock > 0 ? r.atWarehouse / r.minStock : Number.MAX_SAFE_INTEGER),
     },
@@ -219,11 +222,11 @@ export function ReportsView({
   const foremanColumns: DataTableColumn<ForemanReportRow>[] = [
     {
       id: "name",
-      header: t.operations.foreman,
+      header: t("operations.foreman"),
       accessor: (r) => (
         <div className="min-w-0">
           <div className="truncate font-medium">{r.foremanName}</div>
-          <div className="truncate text-xs text-muted-foreground">
+          <div className="truncate text-[13px] text-muted-foreground">
             {[r.brigade, r.projectName].filter(Boolean).join(" · ") || "—"}
           </div>
         </div>
@@ -232,13 +235,13 @@ export function ReportsView({
     },
     {
       id: "material",
-      header: t.operations.material,
+      header: t("operations.material"),
       accessor: (r) => <span className="truncate">{r.materialName}</span>,
       sortValue: (r) => r.materialName,
     },
     {
       id: "issued",
-      header: t.foremen.detail.received,
+      header: t("foremen.detail.received"),
       accessor: (r) => (
         <span className="whitespace-nowrap tabular-nums">{formatQuantity(r.issued, unitOf(r.unit), locale)}</span>
       ),
@@ -248,7 +251,7 @@ export function ReportsView({
     },
     {
       id: "used",
-      header: t.reports.stock.used,
+      header: t("reports.stock.used"),
       accessor: (r) => (
         <span className="whitespace-nowrap tabular-nums text-muted-foreground">
           {formatQuantity(r.used, unitOf(r.unit), locale)}
@@ -260,7 +263,7 @@ export function ReportsView({
     },
     {
       id: "returned",
-      header: t.reports.stock.returned,
+      header: t("reports.stock.returned"),
       accessor: (r) => (
         <span className="whitespace-nowrap tabular-nums text-muted-foreground">
           {formatQuantity(r.returned, unitOf(r.unit), locale)}
@@ -272,7 +275,7 @@ export function ReportsView({
     },
     {
       id: "onHand",
-      header: t.foremen.detail.onHand,
+      header: t("foremen.detail.onHand"),
       accessor: (r) =>
         r.onHand > 0 ? (
           <span className="whitespace-nowrap font-semibold tabular-nums text-orange-700">
@@ -290,24 +293,24 @@ export function ReportsView({
   const projectColumns: DataTableColumn<ProjectReportRow>[] = [
     {
       id: "name",
-      header: t.operations.project,
+      header: t("operations.project"),
       accessor: (r) => (
         <div className="min-w-0">
           <div className="truncate font-medium">{r.projectName}</div>
-          <div className="truncate text-xs text-muted-foreground">{r.address || "—"}</div>
+          <div className="truncate text-[13px] text-muted-foreground">{r.address || "—"}</div>
         </div>
       ),
       sortValue: (r) => r.projectName,
     },
     {
       id: "material",
-      header: t.operations.material,
+      header: t("operations.material"),
       accessor: (r) => <span className="truncate">{r.materialName}</span>,
       sortValue: (r) => r.materialName,
     },
     {
       id: "issued",
-      header: t.projects.detail.issued,
+      header: t("projects.detail.issued"),
       accessor: (r) => (
         <span className="whitespace-nowrap tabular-nums">{formatQuantity(r.issued, unitOf(r.unit), locale)}</span>
       ),
@@ -317,7 +320,7 @@ export function ReportsView({
     },
     {
       id: "used",
-      header: t.projects.detail.used,
+      header: t("projects.detail.used"),
       accessor: (r) => (
         <span className="whitespace-nowrap tabular-nums text-muted-foreground">
           {formatQuantity(r.used, unitOf(r.unit), locale)}
@@ -329,7 +332,7 @@ export function ReportsView({
     },
     {
       id: "remaining",
-      header: t.projects.detail.remaining,
+      header: t("projects.detail.remaining"),
       accessor: (r) => (
         <span className="whitespace-nowrap tabular-nums">
           {formatQuantity(Math.max(0, r.remaining), unitOf(r.unit), locale)}
@@ -346,14 +349,14 @@ export function ReportsView({
   return (
     <div className="space-y-5" data-pending={isPending || undefined}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[13px] text-muted-foreground">{t.reports.periodLabel}</span>
+        <span className="text-[14.5px] text-muted-foreground">{t("reports.periodLabel")}</span>
         <Select
           value={period}
           onValueChange={(value) => setPeriod(value ?? "all")}
           items={periodLabels}
         >
           <SelectTrigger className="w-52">
-            <SelectValue placeholder={t.common.period} />
+            <SelectValue placeholder={t("common.period")} />
           </SelectTrigger>
           <SelectContent>
             {REPORT_PERIOD_KEYS.map((value) => (
@@ -370,43 +373,43 @@ export function ReportsView({
         <TabsList className="max-w-full overflow-x-auto">
           <TabsTrigger value="stock" className="gap-1.5">
             <Boxes className="h-3.5 w-3.5" />
-            {t.reports.tabs.stock}
+            {t("reports.tabs.stock")}
           </TabsTrigger>
           <TabsTrigger value="foremen" className="gap-1.5">
             <HardHat className="h-3.5 w-3.5" />
-            {t.reports.tabs.foremen}
+            {t("reports.tabs.foremen")}
           </TabsTrigger>
           <TabsTrigger value="projects" className="gap-1.5">
             <Building2 className="h-3.5 w-3.5" />
-            {t.reports.tabs.projects}
+            {t("reports.tabs.projects")}
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="stock" className="mt-4 space-y-3">
           <ReportHeader
             icon={Boxes}
-            title={t.reports.stock.title}
-            description={t.reports.stock.description}
+            title={t("reports.stock.title")}
+            description={t("reports.stock.description")}
             onCsv={() => exportToCsv(`report-stock-${suffix}.csv`, STOCK_HEADERS, stockRows())}
-            onXlsx={() => exportToXlsx(`report-stock-${suffix}.xlsx`, t.reports.tabs.stock, STOCK_HEADERS, stockRows())}
+            onXlsx={() => exportToXlsx(`report-stock-${suffix}.xlsx`, t("reports.tabs.stock"), STOCK_HEADERS, stockRows())}
           />
           <DataTable
             columns={stockColumns}
             data={stock}
             rowKey={(r) => r.materialId}
             pageSize={15}
-            emptyMessage={t.reports.stock.empty}
+            emptyMessage={t("reports.stock.empty")}
           />
         </TabsContent>
 
         <TabsContent value="foremen" className="mt-4 space-y-3">
           <ReportHeader
             icon={HardHat}
-            title={t.reports.foremen.title}
-            description={t.reports.foremen.description}
+            title={t("reports.foremen.title")}
+            description={t("reports.foremen.description")}
             onCsv={() => exportToCsv(`report-foremen-${suffix}.csv`, FOREMAN_HEADERS, foremanRows())}
             onXlsx={() =>
-              exportToXlsx(`report-foremen-${suffix}.xlsx`, t.nav.foremen, FOREMAN_HEADERS, foremanRows())
+              exportToXlsx(`report-foremen-${suffix}.xlsx`, t("nav.foremen"), FOREMAN_HEADERS, foremanRows())
             }
           />
           <DataTable
@@ -414,18 +417,18 @@ export function ReportsView({
             data={foremen}
             rowKey={(r) => r.rowId}
             pageSize={15}
-            emptyMessage={t.reports.foremen.empty}
+            emptyMessage={t("reports.foremen.empty")}
           />
         </TabsContent>
 
         <TabsContent value="projects" className="mt-4 space-y-3">
           <ReportHeader
             icon={Building2}
-            title={t.reports.projects.title}
-            description={t.reports.projects.description}
+            title={t("reports.projects.title")}
+            description={t("reports.projects.description")}
             onCsv={() => exportToCsv(`report-projects-${suffix}.csv`, PROJECT_HEADERS, projectRows())}
             onXlsx={() =>
-              exportToXlsx(`report-projects-${suffix}.xlsx`, t.nav.projects, PROJECT_HEADERS, projectRows())
+              exportToXlsx(`report-projects-${suffix}.xlsx`, t("nav.projects"), PROJECT_HEADERS, projectRows())
             }
           />
           <DataTable
@@ -433,7 +436,7 @@ export function ReportsView({
             data={projects}
             rowKey={(r) => r.rowId}
             pageSize={15}
-            emptyMessage={t.reports.projects.empty}
+            emptyMessage={t("reports.projects.empty")}
           />
         </TabsContent>
       </Tabs>
@@ -454,7 +457,7 @@ function ReportHeader({
   onCsv: () => void;
   onXlsx: () => void;
 }) {
-  const { t } = useI18n();
+  const t = useT();
   return (
     <Card>
       <CardHeader className="flex-col items-start gap-3 space-y-0 sm:flex-row sm:items-center sm:justify-between">
@@ -463,11 +466,11 @@ function ReportHeader({
             <Icon className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <CardTitle className="text-[13px] font-semibold">{title}</CardTitle>
-            <CardDescription className="text-xs">{description}</CardDescription>
+            <CardTitle className="text-[14.5px] font-semibold">{title}</CardTitle>
+            <CardDescription className="text-[13px]">{description}</CardDescription>
           </div>
         </div>
-        <ExportMenu onExportCsv={onCsv} onExportXlsx={onXlsx} label={t.common.exportShort} />
+        <ExportMenu onExportCsv={onCsv} onExportXlsx={onXlsx} label={t("common.exportShort")} />
       </CardHeader>
       <CardContent className="hidden" />
     </Card>

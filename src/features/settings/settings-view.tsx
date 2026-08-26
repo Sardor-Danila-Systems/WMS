@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FormField } from "@/shared/components/form-field";
 import { LanguageSwitch } from "@/components/layout/language-switch";
-import { CATEGORIES, UNITS } from "@/constants/categories";
+import { CATEGORIES, PAYMENT_METHODS, UNITS } from "@/constants/categories";
 import { useT } from "@/i18n/client";
 import { useValueTranslator } from "@/i18n/values";
 import type { Role } from "@/types";
@@ -20,15 +20,18 @@ const ROLE_ORDER: Role[] = ["ADMIN", "WAREHOUSE_WORKER"];
 export function SettingsView({
   companyName: initialCompanyName,
   warehouseAddress: initialAddress,
+  currency: initialCurrency,
 }: {
   companyName: string;
   warehouseAddress: string;
+  currency: string;
 }) {
   const t = useT();
   const unitLabel = useValueTranslator("units");
   const categoryLabel = useValueTranslator("categories");
   const [companyName, setCompanyName] = useState(initialCompanyName);
   const [warehouseAddress, setWarehouseAddress] = useState(initialAddress);
+  const [currency, setCurrency] = useState(initialCurrency);
   const [isPending, setIsPending] = useState(false);
 
   async function handleSave() {
@@ -37,6 +40,7 @@ export function SettingsView({
       const formData = new FormData();
       formData.append("companyName", companyName);
       formData.append("warehouseAddress", warehouseAddress);
+      formData.append("currency", currency);
 
       const result = await saveSettings(formData);
       if (!result.ok) {
@@ -85,6 +89,14 @@ export function SettingsView({
               />
             </FormField>
           </div>
+          <FormField label={t("settings.currency")} hint={t("settings.currencyHint")}>
+            <Input
+              value={currency}
+              onChange={(event) => setCurrency(event.target.value)}
+              disabled={isPending}
+              className="sm:max-w-[200px]"
+            />
+          </FormField>
           <div className="flex justify-end">
             <Button onClick={handleSave} disabled={isPending}>
               {isPending ? t("common.saving") : t("common.save")}
@@ -137,6 +149,37 @@ export function SettingsView({
               </Badge>
             ))}
           </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-[14.5px] font-semibold">{t("settings.paymentTitle")}</CardTitle>
+            <CardDescription className="text-[13px]">{t("settings.paymentHint")}</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-1.5">
+            {PAYMENT_METHODS.map((method) => (
+              <Badge key={method} variant="outline" className="font-normal">
+                {t(`paymentMethods.${method}`)}
+              </Badge>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+            <div className="min-w-0">
+              <CardTitle className="text-[14.5px] font-semibold">
+                {t("settings.integrationTitle")}
+              </CardTitle>
+              <CardDescription className="text-[13px]">
+                {t("settings.integrationHint")}
+              </CardDescription>
+            </div>
+            <Badge variant="outline" className="shrink-0 font-normal text-muted-foreground">
+              {t("settings.integrationStatus")}
+            </Badge>
+          </CardHeader>
+          <CardContent className="hidden" />
         </Card>
       </div>
     </div>

@@ -12,18 +12,22 @@ import { ExportMenu } from "@/shared/components/export-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { formatDate, formatQuantity } from "@/lib/format";
+import { formatDate, formatMoney, formatQuantity } from "@/lib/format";
 import { exportToCsv, exportToXlsx } from "@/lib/export";
+import { matchesSearch } from "@/lib/search";
 import { useIntlTag, useT } from "@/i18n/client";
 import { useValueTranslator } from "@/i18n/values";
 import type { Material } from "@/types";
+import { PriceCell } from "./price-cell";
 
 export function MaterialsTable({
   materials,
   initialLowStockOnly = false,
+  canEditPrice = false,
 }: {
   materials: Material[];
   initialLowStockOnly?: boolean;
+  canEditPrice?: boolean;
 }) {
   const router = useRouter();
   const t = useT();
@@ -38,12 +42,17 @@ export function MaterialsTable({
   const categoryOf = (value: string) => categoryLabel(value);
 
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
     return materials.filter((m) => {
+      // Ищем и по исходному значению, и по переводу: единица хранится как «шт»,
+      // а узбекский пользователь ищет «dona».
       if (
-        term &&
-        !m.name.toLowerCase().includes(term) &&
-        !categoryOf(m.category).toLowerCase().includes(term)
+        !matchesSearch(search, [
+          m.name,
+          m.category,
+          categoryOf(m.category),
+          m.unit,
+          unitOf(m.unit),
+        ])
       ) {
         return false;
       }
@@ -63,7 +72,9 @@ export function MaterialsTable({
       accessor: (m) => (
         <div className="min-w-0">
           <div className="truncate font-medium">{m.name}</div>
-          <div className="truncate text-[13px] text-muted-foreground">{categoryOf(m.category)}</div>
+          <div className="truncate text-[13px] text-muted-foreground">
+            {categoryOf(m.category)} · {unitOf(m.unit)}
+          </div>
         </div>
       ),
       sortValue: (m) => m.name,
@@ -80,28 +91,38 @@ export function MaterialsTable({
       ...numeric,
     },
     {
-      id: "atForemen",
-      header: t("materials.atForemen"),
+      id: "price",
+      header: t("materials.priceColumn"),
+      accessor: (m) => <PriceCell material={m} canEdit={canEditPrice} />,
+      sortValue: (m) => m.price,
+      ...numeric,
+    },
+    {
+      id: "value",
+      header: t("materials.valueColumn"),
       accessor: (m) =>
-        m.atForemen > 0 ? (
-          <span className="whitespace-nowrap tabular-nums text-[#9c4d16]">
-            {formatQuantity(m.atForemen, unitOf(m.unit), locale)}
+        m.price > 0 && m.quantity > 0 ? (
+          <span className="whitespace-nowrap tabular-nums text-muted-foreground">
+            {formatMoney(m.quantity * m.price, locale)}
           </span>
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
-      sortValue: (m) => m.atForemen,
+      sortValue: (m) => m.quantity * m.price,
       ...numeric,
     },
     {
-      id: "minStock",
-      header: t("materials.minStockShort"),
-      accessor: (m) => (
-        <span className="whitespace-nowrap tabular-nums text-muted-foreground">
-          {formatQuantity(m.minStock, unitOf(m.unit), locale)}
-        </span>
-      ),
-      sortValue: (m) => m.minStock,
+      id: "atBlocks",
+      header: t("materials.atBlocks"),
+      accessor: (m) =>
+        m.atBlocks > 0 ? (
+          <span className="whitespace-nowrap tabular-nums text-[#9c4d16]">
+            {formatQuantity(m.atBlocks, unitOf(m.unit), locale)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+      sortValue: (m) => m.atBlocks,
       ...numeric,
     },
     {
@@ -122,12 +143,16 @@ export function MaterialsTable({
     },
   ];
 
+  const totalValue = filtered.reduce((sum, m) => sum + m.quantity * m.price, 0);
+
   const headers = [
     t("materials.name"),
     t("materials.category"),
     t("materials.unit"),
+    t("materials.priceColumn"),
     t("materials.atWarehouse"),
-    t("materials.atForemen"),
+    t("materials.valueColumn"),
+    t("materials.atBlocks"),
     t("common.total"),
     t("materials.minStockShort"),
     t("common.status"),
@@ -139,9 +164,11 @@ export function MaterialsTable({
       m.name,
       categoryOf(m.category),
       unitOf(m.unit),
+      m.price,
       m.quantity,
-      m.atForemen,
-      m.quantity + m.atForemen,
+      m.quantity * m.price,
+      m.atBlocks,
+      m.quantity + m.atBlocks,
       m.minStock,
       t(`stockStatus.${getStockStatus(m.quantity, m.minStock)}`),
       m.lastReceiptDate ? formatDate(m.lastReceiptDate, locale) : "",
@@ -204,6 +231,15 @@ export function MaterialsTable({
         </div>
       </div>
 
+      {totalValue > 0 && (
+        <p className="text-[13px] text-muted-foreground">
+          {t("money.warehouseValue")}:{" "}
+          <span className="font-semibold tabular-nums text-foreground">
+            {formatMoney(totalValue, locale)} {t("money.currency")}
+          </span>
+        </p>
+      )}
+
       <DataTable
         columns={columns}
         data={filtered}
@@ -215,7 +251,9 @@ export function MaterialsTable({
           subtitle: (
             <>
               {categoryOf(m.category)}
-              {m.atForemen > 0 && ` · ${t("materials.atForemen")}: ${formatQuantity(m.atForemen, unitOf(m.unit), locale)}`}
+              {m.price > 0 && ` · ${formatMoney(m.price, locale)} ${t("money.currency")}`}
+              {m.atBlocks > 0 &&
+                ` · ${t("materials.atBlocks")}: ${formatQuantity(m.atBlocks, unitOf(m.unit), locale)}`}
             </>
           ),
           trailing: (

@@ -2,16 +2,16 @@ import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   Package,
-  TruckIcon,
-  PackageMinus,
+  ArrowDownToLine,
+  ArrowUpFromLine,
   Undo2,
   History,
-  HardHat,
+  Blocks,
+  Truck,
+  Building2,
   Users,
   FileBarChart,
   Settings,
-  Hammer,
-  Building2,
 } from "lucide-react";
 
 import type { Role } from "@/types";
@@ -21,11 +21,11 @@ export type NavKey =
   | "materials"
   | "receipts"
   | "issues"
-  | "usage"
   | "returns"
   | "history"
-  | "foremen"
-  | "projects"
+  | "blocks"
+  | "suppliers"
+  | "organizations"
   | "workers"
   | "reports"
   | "settings";
@@ -61,9 +61,8 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     key: "operations",
     items: [
-      { key: "receipts", href: "/receipts", icon: TruckIcon },
-      { key: "issues", href: "/issues", icon: PackageMinus },
-      { key: "usage", href: "/usage", icon: Hammer },
+      { key: "receipts", href: "/receipts", icon: ArrowDownToLine },
+      { key: "issues", href: "/issues", icon: ArrowUpFromLine },
       { key: "returns", href: "/returns", icon: Undo2 },
       { key: "history", href: "/history", icon: History },
     ],
@@ -71,8 +70,9 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     key: "directories",
     items: [
-      { key: "foremen", href: "/foremen", icon: HardHat },
-      { key: "projects", href: "/projects", icon: Building2 },
+      { key: "blocks", href: "/blocks", icon: Blocks },
+      { key: "suppliers", href: "/suppliers", icon: Truck },
+      { key: "organizations", href: "/organizations", icon: Building2, roles: ["ADMIN"] },
       { key: "workers", href: "/workers", icon: Users, roles: ["ADMIN"] },
     ],
   },

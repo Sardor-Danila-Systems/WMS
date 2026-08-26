@@ -1,18 +1,22 @@
 "use client";
 
-import { ArrowDownToLine, ArrowUpFromLine, Hammer, RotateCcw } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, Banknote, Landmark, RotateCcw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { MOVEMENT_COLORS, STOCK_STATUS_COLORS, type StockStatus } from "@/constants/colors";
 import { useIntlTag, useT } from "@/i18n/client";
 import { formatNumber } from "@/lib/format";
-import type { MovementType } from "@/types";
+import type { MovementType, PaymentMethod } from "@/types";
 
 const MOVEMENT_ICONS: Record<MovementType, typeof ArrowDownToLine> = {
   RECEIPT: ArrowDownToLine,
   ISSUE: ArrowUpFromLine,
-  USAGE: Hammer,
   RETURN: RotateCcw,
+};
+
+const PAYMENT_ICONS: Record<PaymentMethod, typeof Banknote> = {
+  CASH: Banknote,
+  TRANSFER: Landmark,
 };
 
 export function MovementTypeBadge({ type }: { type: MovementType }) {
@@ -30,6 +34,18 @@ export function MovementTypeBadge({ type }: { type: MovementType }) {
     >
       <Icon className="h-3 w-3" />
       {t(`movements.${type}`)}
+    </span>
+  );
+}
+
+/** Наличные или перечисление — как в графе «способ оплаты» накладной. */
+export function PaymentBadge({ method }: { method: PaymentMethod }) {
+  const t = useT();
+  const Icon = PAYMENT_ICONS[method];
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-muted/50 px-2 py-0.5 text-[12.5px] font-medium text-muted-foreground">
+      <Icon className="h-3 w-3" />
+      {t(`paymentMethods.short.${method}`)}
     </span>
   );
 }

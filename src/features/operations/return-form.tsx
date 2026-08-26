@@ -22,7 +22,11 @@ import type { OperationRefData } from "./types";
 
 type Values = z.input<typeof returnSchema>;
 
-/** Возврат неизрасходованного материала от бригадира обратно на склад. */
+/**
+ * Возврат неизрасходованного материала из блока обратно на склад.
+ * Цена здесь не запрашивается: возвращается тот же материал, что был выдан,
+ * и оценивается он по цене выдачи — иначе возврат «создавал» бы деньги.
+ */
 export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSuccess: () => void }) {
   const t = useT();
   const unitLabel = useValueTranslator("units");
@@ -40,7 +44,7 @@ export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSucc
   } = useForm<Values>({
     resolver: zodResolver(returnSchema),
     defaultValues: {
-      foremanId: "",
+      blockId: "",
       materialId: "",
       quantity: "" as unknown as number,
       reason: "",
@@ -49,16 +53,16 @@ export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSucc
     },
   });
 
-  const foremanId = watch("foremanId");
+  const blockId = watch("blockId");
   const materialId = watch("materialId");
   const quantity = Number(watch("quantity"));
 
-  const held = foremanId ? (data.foremanStock[foremanId] ?? []) : [];
+  const held = blockId ? (data.blockStock[blockId] ?? []) : [];
   const position = held.find((row) => row.materialId === materialId);
 
   useEffect(() => {
     setValue("materialId", "");
-  }, [foremanId, setValue]);
+  }, [blockId, setValue]);
 
   const exceedsHeld = Boolean(position) && quantity > 0 && quantity > position!.quantity;
 
@@ -68,7 +72,9 @@ export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSucc
     successTitle: t("operations.return.success"),
     successDescription: (values) =>
       position
-        ? t("operations.return.successHint", { qty: formatQuantity(Number(values.quantity), unitOf(position.unit), locale) })
+        ? t("operations.return.successHint", {
+            qty: formatQuantity(Number(values.quantity), unitOf(position.unit), locale),
+          })
         : undefined,
     onSuccess,
   });
@@ -77,24 +83,24 @@ export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSucc
     <form onSubmit={handleSubmit(submit)} className="space-y-4">
       <SelectField
         control={control}
-        name="foremanId"
-        label={t("operations.foreman")}
-        placeholder={t("operations.return.foremanPlaceholder")}
+        name="blockId"
+        label={t("operations.block")}
+        placeholder={t("operations.return.blockPlaceholder")}
         required
-        error={errors.foremanId?.message}
+        error={errors.blockId?.message}
         disabled={isPending}
-        options={data.foremen.map((f) => ({ value: f.id, label: f.name, hint: f.brigade }))}
+        options={data.blocks.map((b) => ({ value: b.id, label: b.name, hint: b.description }))}
       />
 
       <SelectField
         control={control}
         name="materialId"
         label={t("operations.material")}
-        placeholder={foremanId ? t("operations.return.materialPlaceholder") : t("operations.selectForemanFirst")}
+        placeholder={blockId ? t("operations.return.materialPlaceholder") : t("operations.selectBlockFirst")}
         required
         error={errors.materialId?.message}
-        disabled={isPending || !foremanId}
-        emptyMessage={t("operations.noStockForeman")}
+        disabled={isPending || !blockId}
+        emptyMessage={t("operations.noStockBlock")}
         options={held.map((row) => ({
           value: row.materialId,
           label: row.materialName,
@@ -102,7 +108,11 @@ export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSucc
         }))}
       >
         {position && (
-          <AvailableHint available={position.quantity} unit={position.unit} label={t("operations.atForemanHand")} />
+          <AvailableHint
+            available={position.quantity}
+            unit={unitOf(position.unit)}
+            label={t("operations.atBlock")}
+          />
         )}
       </SelectField>
 
@@ -110,7 +120,7 @@ export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSucc
         <FormField
           label={t("operations.quantity")}
           required
-          error={errors.quantity?.message ?? (exceedsHeld ? t("operations.exceedsForeman") : undefined)}
+          error={errors.quantity?.message ?? (exceedsHeld ? t("operations.exceedsBlock") : undefined)}
         >
           <QuantityInput
             unit={position ? unitOf(position.unit) : undefined}

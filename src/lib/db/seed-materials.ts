@@ -8,20 +8,38 @@ export interface MaterialSeed {
   minStock: number;
 }
 
+/**
+ * Демонстрационная цена за единицу, в сумах. Порядок величин взят из реальных
+ * накладных: мешок цемента — десятки тысяч, тонна арматуры — миллионы.
+ */
+export const DEMO_PRICE_BY_UNIT: Record<Unit, [number, number]> = {
+  "шт": [2_000, 25_000],
+  "кг": [8_000, 30_000],
+  "метр": [15_000, 60_000],
+  "комплект": [80_000, 600_000],
+  "мешок": [35_000, 90_000],
+  "м²": [40_000, 180_000],
+  "м³": [180_000, 450_000],
+  "т": [4_500_000, 9_500_000],
+  "л": [25_000, 90_000],
+  "рулон": [90_000, 350_000],
+  "упаковка": [45_000, 250_000],
+};
+
 export const MATERIALS_SEED: MaterialSeed[] = [
   // Цемент и смеси
   { id: "mat-01", name: "Цемент М500", category: "Цемент и смеси", unit: "т", minStock: 8 },
   { id: "mat-02", name: "Цемент М400", category: "Цемент и смеси", unit: "т", minStock: 6 },
-  { id: "mat-03", name: "Клей плиточный", category: "Цемент и смеси", unit: "уп", minStock: 120 },
-  { id: "mat-04", name: "Штукатурка гипсовая", category: "Цемент и смеси", unit: "уп", minStock: 150 },
-  { id: "mat-05", name: "Наливной пол", category: "Цемент и смеси", unit: "уп", minStock: 60 },
+  { id: "mat-03", name: "Клей плиточный", category: "Цемент и смеси", unit: "упаковка", minStock: 120 },
+  { id: "mat-04", name: "Штукатурка гипсовая", category: "Цемент и смеси", unit: "упаковка", minStock: 150 },
+  { id: "mat-05", name: "Наливной пол", category: "Цемент и смеси", unit: "упаковка", minStock: 60 },
 
   // Металлопрокат
   { id: "mat-06", name: "Арматура 8 мм", category: "Металлопрокат", unit: "т", minStock: 4 },
   { id: "mat-07", name: "Арматура 12 мм", category: "Металлопрокат", unit: "т", minStock: 5 },
   { id: "mat-08", name: "Арматура 16 мм", category: "Металлопрокат", unit: "т", minStock: 3 },
-  { id: "mat-09", name: "Труба профильная 40х20", category: "Металлопрокат", unit: "м", minStock: 300 },
-  { id: "mat-10", name: "Уголок стальной 50х50", category: "Металлопрокат", unit: "м", minStock: 200 },
+  { id: "mat-09", name: "Труба профильная 40х20", category: "Металлопрокат", unit: "метр", minStock: 300 },
+  { id: "mat-10", name: "Уголок стальной 50х50", category: "Металлопрокат", unit: "метр", minStock: 200 },
   { id: "mat-11", name: "Сетка кладочная", category: "Металлопрокат", unit: "рулон", minStock: 40 },
 
   // Нерудные материалы
@@ -58,19 +76,19 @@ export const MATERIALS_SEED: MaterialSeed[] = [
   { id: "mat-34", name: "ОСБ плита 9 мм", category: "Пиломатериалы", unit: "шт", minStock: 150 },
 
   // Изоляция
-  { id: "mat-35", name: "Минвата плита", category: "Изоляция", unit: "уп", minStock: 100 },
-  { id: "mat-36", name: "Пенопласт ПСБ-25", category: "Изоляция", unit: "уп", minStock: 90 },
-  { id: "mat-37", name: "Пеноплекс 50мм", category: "Изоляция", unit: "уп", minStock: 70 },
+  { id: "mat-35", name: "Минвата плита", category: "Изоляция", unit: "упаковка", minStock: 100 },
+  { id: "mat-36", name: "Пенопласт ПСБ-25", category: "Изоляция", unit: "упаковка", minStock: 90 },
+  { id: "mat-37", name: "Пеноплекс 50мм", category: "Изоляция", unit: "упаковка", minStock: 70 },
   { id: "mat-38", name: "Гидроизоляция рулонная", category: "Изоляция", unit: "рулон", minStock: 60 },
 
   // Крепёж
   { id: "mat-39", name: "Саморезы по металлу", category: "Крепёж", unit: "кг", minStock: 80 },
   { id: "mat-40", name: "Саморезы по дереву", category: "Крепёж", unit: "кг", minStock: 80 },
-  { id: "mat-41", name: "Дюбель-гвоздь", category: "Крепёж", unit: "уп", minStock: 200 },
+  { id: "mat-41", name: "Дюбель-гвоздь", category: "Крепёж", unit: "упаковка", minStock: 200 },
   { id: "mat-42", name: "Электроды сварочные", category: "Крепёж", unit: "кг", minStock: 50 },
 
   // Электрика и сантехника
-  { id: "mat-43", name: "Кабель ВВГ 3х2.5", category: "Электрика и сантехника", unit: "м", minStock: 500 },
-  { id: "mat-44", name: "Труба ПВХ канализационная", category: "Электрика и сантехника", unit: "м", minStock: 300 },
-  { id: "mat-45", name: "Труба полипропиленовая", category: "Электрика и сантехника", unit: "м", minStock: 400 },
+  { id: "mat-43", name: "Кабель ВВГ 3х2.5", category: "Электрика и сантехника", unit: "метр", minStock: 500 },
+  { id: "mat-44", name: "Труба ПВХ канализационная", category: "Электрика и сантехника", unit: "метр", minStock: 300 },
+  { id: "mat-45", name: "Труба полипропиленовая", category: "Электрика и сантехника", unit: "метр", minStock: 400 },
 ];

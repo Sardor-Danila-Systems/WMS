@@ -6,8 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Pencil, Plus } from "lucide-react";
 import type { z } from "zod";
 
-import { saveForeman } from "@/app/actions/catalog";
-import { foremanSchema } from "@/lib/validation";
+import { saveSupplier } from "@/app/actions/catalog";
+import { supplierSchema } from "@/lib/validation";
 import { FormField } from "@/shared/components/form-field";
 import { useT } from "@/i18n/client";
 import { Input } from "@/components/ui/input";
@@ -21,45 +21,37 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { SelectField } from "@/features/operations/fields";
 import { useActionSubmit } from "@/features/operations/use-operation-form";
-import type { Foreman, Project } from "@/types";
+import type { Supplier } from "@/types";
 
-type Values = z.input<typeof foremanSchema> & { id?: string };
+type Values = z.input<typeof supplierSchema> & { id?: string };
 
-export function ForemanFormDialog({
-  foreman,
-  projects,
-}: {
-  foreman?: Foreman;
-  projects: Project[];
-}) {
+export function SupplierFormDialog({ supplier }: { supplier?: Supplier }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const isEdit = Boolean(foreman);
+  const isEdit = Boolean(supplier);
 
   const {
     register,
     handleSubmit,
-    control,
     reset,
     setError,
     formState: { errors },
   } = useForm<Values>({
-    resolver: zodResolver(foremanSchema),
+    resolver: zodResolver(supplierSchema),
     defaultValues: {
-      name: foreman?.name ?? "",
-      phone: foreman?.phone ?? "",
-      brigade: foreman?.brigade ?? "",
-      projectId: foreman?.projectId ?? "",
-      isActive: foreman?.isActive ?? true,
+      name: supplier?.name ?? "",
+      contact: supplier?.contact ?? "",
+      phone: supplier?.phone ?? "",
+      inn: supplier?.inn ?? "",
+      isActive: supplier?.isActive ?? true,
     },
   });
 
   const { submit, isPending } = useActionSubmit<Values>({
-    action: saveForeman,
+    action: saveSupplier,
     setError,
-    successTitle: isEdit ? t("foremen.saved") : t("foremen.created"),
+    successTitle: isEdit ? t("suppliers.saved") : t("suppliers.created"),
     onSuccess: () => {
       setOpen(false);
       if (!isEdit) reset();
@@ -69,27 +61,32 @@ export function ForemanFormDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
-        render={<Button size="sm" variant={isEdit ? "outline" : "default"} className="gap-1.5" />}
+        render={
+          <Button
+            size="sm"
+            variant={isEdit ? "outline" : "default"}
+            className="gap-1.5"
+            aria-label={isEdit ? t("common.edit") : undefined}
+          />
+        }
       >
         {isEdit ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-        {isEdit ? t("common.edit") : t("foremen.add")}
+        {isEdit ? t("common.edit") : t("suppliers.add")}
       </DialogTrigger>
 
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEdit ? t("foremen.edit") : t("foremen.create")}</DialogTitle>
-          <DialogDescription>
-            {t("foremen.hint")}
-          </DialogDescription>
+          <DialogTitle>{isEdit ? t("suppliers.edit") : t("suppliers.create")}</DialogTitle>
+          <DialogDescription>{t("suppliers.hint")}</DialogDescription>
         </DialogHeader>
 
         <form
-          onSubmit={handleSubmit((values) => submit({ ...values, id: foreman?.id }))}
+          onSubmit={handleSubmit((values) => submit({ ...values, id: supplier?.id }))}
           className="space-y-4"
         >
-          <FormField label={t("foremen.fullName")} required error={errors.name?.message}>
+          <FormField label={t("suppliers.name")} required error={errors.name?.message}>
             <Input
-              placeholder={t("foremen.namePlaceholder")}
+              placeholder={t("suppliers.namePlaceholder")}
               autoFocus
               disabled={isPending}
               aria-invalid={Boolean(errors.name)}
@@ -98,24 +95,30 @@ export function ForemanFormDialog({
           </FormField>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label={t("foremen.phone")} error={errors.phone?.message}>
-              <Input placeholder={t("foremen.phonePlaceholder")} disabled={isPending} {...register("phone")} />
+            <FormField label={t("suppliers.contact")} error={errors.contact?.message}>
+              <Input
+                placeholder={t("suppliers.contactPlaceholder")}
+                disabled={isPending}
+                {...register("contact")}
+              />
             </FormField>
 
-            <FormField label={t("foremen.brigade")} error={errors.brigade?.message}>
-              <Input placeholder={t("foremen.brigadePlaceholder")} disabled={isPending} {...register("brigade")} />
+            <FormField label={t("suppliers.phone")} error={errors.phone?.message}>
+              <Input
+                placeholder={t("suppliers.phonePlaceholder")}
+                disabled={isPending}
+                {...register("phone")}
+              />
             </FormField>
           </div>
 
-          <SelectField
-            control={control}
-            name="projectId"
-            label={t("operations.project")}
-            placeholder={t("foremen.projectPlaceholder")}
-            error={errors.projectId?.message}
-            disabled={isPending}
-            options={projects.map((p) => ({ value: p.id, label: p.name }))}
-          />
+          <FormField label={t("suppliers.inn")} error={errors.inn?.message}>
+            <Input
+              placeholder={t("suppliers.innPlaceholder")}
+              disabled={isPending}
+              {...register("inn")}
+            />
+          </FormField>
 
           {isEdit && (
             <FormField label={t("common.status")}>
@@ -126,7 +129,7 @@ export function ForemanFormDialog({
                   disabled={isPending}
                   {...register("isActive")}
                 />
-                {t("foremen.activeLabel")}
+                {t("suppliers.activeLabel")}
               </label>
             </FormField>
           )}

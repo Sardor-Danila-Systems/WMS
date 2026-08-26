@@ -16,15 +16,13 @@ import { useT } from "@/i18n/client";
 import type { MovementType } from "@/types";
 import { ReceiptForm } from "./receipt-form";
 import { IssueForm } from "./issue-form";
-import { UsageForm } from "./usage-form";
 import { ReturnForm } from "./return-form";
 import type { OperationRefData } from "./types";
 
 /** Подписи диалога по типу операции. */
-const DIALOG_KEYS: Record<MovementType, "receipt" | "issue" | "usage" | "return"> = {
+const DIALOG_KEYS: Record<MovementType, "receipt" | "issue" | "return"> = {
   RECEIPT: "receipt",
   ISSUE: "issue",
-  USAGE: "usage",
   RETURN: "return",
 };
 
@@ -60,7 +58,6 @@ export function OperationDialog({
         </DialogHeader>
         {type === "RECEIPT" && <ReceiptForm data={data} onSuccess={close} />}
         {type === "ISSUE" && <IssueForm data={data} onSuccess={close} />}
-        {type === "USAGE" && <UsageForm data={data} onSuccess={close} />}
         {type === "RETURN" && <ReturnForm data={data} onSuccess={close} />}
       </DialogContent>
     </Dialog>

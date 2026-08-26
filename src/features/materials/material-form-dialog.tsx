@@ -23,7 +23,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { SelectField } from "@/features/operations/fields";
+import { PriceInput, SelectField } from "@/features/operations/fields";
 import { useActionSubmit } from "@/features/operations/use-operation-form";
 import type { Material } from "@/types";
 
@@ -55,6 +55,7 @@ export function MaterialFormDialog({
       name: material?.name ?? "",
       category: material?.category ?? "",
       unit: material?.unit ?? "",
+      price: (material?.price ?? "") as unknown as number,
       minStock: (material?.minStock ?? "") as unknown as number,
       initialQuantity: "" as unknown as number,
     },
@@ -145,6 +146,18 @@ export function MaterialFormDialog({
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField
+              label={t("money.price")}
+              error={errors.price?.message}
+              hint={t("money.priceHint")}
+            >
+              <PriceInput
+                invalid={Boolean(errors.price)}
+                disabled={isPending}
+                {...register("price")}
+              />
+            </FormField>
+
             <FormField label={t("materials.minStock")} required error={errors.minStock?.message}>
               <Input
                 type="number"
@@ -156,20 +169,20 @@ export function MaterialFormDialog({
                 {...register("minStock")}
               />
             </FormField>
-
-            {!isEdit && (
-              <FormField label={t("materials.initialQuantity")} error={errors.initialQuantity?.message}>
-                <Input
-                  type="number"
-                  step="any"
-                  min="0"
-                  placeholder="0"
-                  disabled={isPending}
-                  {...register("initialQuantity")}
-                />
-              </FormField>
-            )}
           </div>
+
+          {!isEdit && (
+            <FormField label={t("materials.initialQuantity")} error={errors.initialQuantity?.message}>
+              <Input
+                type="number"
+                step="any"
+                min="0"
+                placeholder="0"
+                disabled={isPending}
+                {...register("initialQuantity")}
+              />
+            </FormField>
+          )}
 
           <DialogFooter>
             <Button type="submit" disabled={isPending}>

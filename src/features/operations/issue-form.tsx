@@ -6,8 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 
 import { createIssue } from "@/app/actions/movements";
-import { issueSchema } from "@/lib/validation";
-import { formatQuantity } from "@/lib/format";
+import { issueSchema, lineAmount } from "@/lib/validation";
+import { formatMoney, formatQuantity } from "@/lib/format";
 import { useIntlTag, useT } from "@/i18n/client";
 import { useValueTranslator } from "@/i18n/values";
 import { FormField } from "@/shared/components/form-field";
@@ -15,17 +15,28 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
-import { SelectField, QuantityInput, AvailableHint } from "./fields";
+import {
+  SelectField,
+  QuantityInput,
+  PriceInput,
+  AmountPreview,
+  AvailableHint,
+  PaymentMethodField,
+} from "./fields";
 import { todayISODate, useActionSubmit } from "./use-operation-form";
 import type { OperationRefData } from "./types";
 
 type Values = z.input<typeof issueSchema>;
 
+/** Расход: склад → блок стройки. */
 export function IssueForm({ data, onSuccess }: { data: OperationRefData; onSuccess: () => void }) {
   const t = useT();
   const unitLabel = useValueTranslator("units");
   const locale = useIntlTag();
   const unitOf = (unit: string) => unitLabel(unit);
+
+  const onlyOrganization = data.organizations.length === 1 ? data.organizations[0].id : "";
+
   const {
     register,
     handleSubmit,
@@ -37,25 +48,36 @@ export function IssueForm({ data, onSuccess }: { data: OperationRefData; onSucce
   } = useForm<Values>({
     resolver: zodResolver(issueSchema),
     defaultValues: {
-      foremanId: "",
+      blockId: "",
       materialId: "",
       quantity: "" as unknown as number,
-      projectId: "",
+      unitPrice: "",
+      organizationId: onlyOrganization,
+      invoiceNumber: "",
+      vehicleNumber: "",
+      paymentMethod: "",
       occurredAt: todayISODate(),
       comment: "",
     },
   });
 
-  const foremanId = watch("foremanId");
+  const blockId = watch("blockId");
   const material = data.materials.find((m) => m.id === watch("materialId"));
   const quantity = Number(watch("quantity"));
+  const rawPrice = watch("unitPrice");
+  const unitPrice = rawPrice === "" || rawPrice === undefined ? null : Number(rawPrice);
 
-  // Объект подставляется из карточки бригадира — обычно бригада работает
-  // на закреплённом объекте, и лишний выбор только замедляет оформление.
-  const foreman = data.foremen.find((f) => f.id === foremanId);
+  // Организация берётся из карточки блока: блок закреплён за организацией,
+  // и повторный выбор только замедляет оформление.
+  const block = data.blocks.find((b) => b.id === blockId);
   useEffect(() => {
-    if (foreman?.projectId) setValue("projectId", foreman.projectId);
-  }, [foreman?.projectId, setValue]);
+    if (block?.organizationId) setValue("organizationId", block.organizationId);
+  }, [block?.organizationId, setValue]);
+
+  // Расход идёт по текущей цене материала — её можно поправить вручную.
+  useEffect(() => {
+    if (material && material.price > 0) setValue("unitPrice", material.price);
+  }, [material, setValue]);
 
   const exceedsStock = Boolean(material) && quantity > 0 && quantity > material!.quantity;
 
@@ -65,23 +87,35 @@ export function IssueForm({ data, onSuccess }: { data: OperationRefData; onSucce
     successTitle: t("operations.issue.success"),
     successDescription: (values) =>
       material
-        ? t("operations.issue.successHint", { qty: formatQuantity(Number(values.quantity), unitOf(material.unit), locale) })
+        ? t("operations.issue.successHint", {
+            qty: formatQuantity(Number(values.quantity), unitOf(material.unit), locale),
+            amount: `${formatMoney(
+              lineAmount(Number(values.quantity), unitPrice ?? material.price),
+              locale
+            )} ${t("money.currency")}`,
+          })
         : undefined,
     onSuccess,
   });
 
   return (
     <form onSubmit={handleSubmit(submit)} className="space-y-4">
-      <SelectField
-        control={control}
-        name="foremanId"
-        label={t("operations.foreman")}
-        placeholder={t("operations.issue.foremanPlaceholder")}
-        required
-        error={errors.foremanId?.message}
-        disabled={isPending}
-        options={data.foremen.map((f) => ({ value: f.id, label: f.name, hint: f.brigade }))}
-      />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <SelectField
+          control={control}
+          name="blockId"
+          label={t("operations.block")}
+          placeholder={t("operations.issue.blockPlaceholder")}
+          required
+          error={errors.blockId?.message}
+          disabled={isPending}
+          options={data.blocks.map((b) => ({ value: b.id, label: b.name, hint: b.description }))}
+        />
+
+        <FormField label={t("operations.issue.date")} required error={errors.occurredAt?.message}>
+          <Input type="date" max={todayISODate()} disabled={isPending} {...register("occurredAt")} />
+        </FormField>
+      </div>
 
       <SelectField
         control={control}
@@ -98,7 +132,11 @@ export function IssueForm({ data, onSuccess }: { data: OperationRefData; onSucce
         }))}
       >
         {material && (
-          <AvailableHint available={material.quantity} unit={material.unit} label={t("operations.availableAtWarehouse")} />
+          <AvailableHint
+            available={material.quantity}
+            unit={unitOf(material.unit)}
+            label={t("operations.availableAtWarehouse")}
+          />
         )}
       </SelectField>
 
@@ -117,20 +155,60 @@ export function IssueForm({ data, onSuccess }: { data: OperationRefData; onSucce
           />
         </FormField>
 
-        <FormField label={t("operations.issue.date")} required error={errors.occurredAt?.message}>
-          <Input type="date" max={todayISODate()} disabled={isPending} {...register("occurredAt")} />
+        <FormField
+          label={material ? t("money.pricePerUnit", { unit: unitOf(material.unit) }) : t("money.unitPrice")}
+          error={errors.unitPrice?.message}
+        >
+          <PriceInput
+            invalid={Boolean(errors.unitPrice)}
+            disabled={isPending}
+            {...register("unitPrice")}
+          />
         </FormField>
       </div>
 
-      <SelectField
-        control={control}
-        name="projectId"
-        label={t("operations.project")}
-        placeholder={t("operations.issue.projectPlaceholder")}
-        error={errors.projectId?.message}
-        disabled={isPending}
-        options={data.projects.map((p) => ({ value: p.id, label: p.name }))}
+      <AmountPreview
+        quantity={quantity}
+        unitPrice={unitPrice}
+        fallbackPrice={material?.price ?? 0}
       />
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <SelectField
+          control={control}
+          name="organizationId"
+          label={t("operations.organization")}
+          placeholder={t("operations.organizationPlaceholder")}
+          error={errors.organizationId?.message}
+          disabled={isPending}
+          options={data.organizations.map((o) => ({ value: o.id, label: o.name }))}
+        />
+
+        <FormField label={t("operations.invoiceNumber")} error={errors.invoiceNumber?.message}>
+          <Input
+            placeholder={t("operations.invoicePlaceholder")}
+            disabled={isPending}
+            {...register("invoiceNumber")}
+          />
+        </FormField>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label={t("operations.vehicleNumber")} error={errors.vehicleNumber?.message}>
+          <Input
+            placeholder={t("operations.vehiclePlaceholder")}
+            disabled={isPending}
+            {...register("vehicleNumber")}
+          />
+        </FormField>
+
+        <PaymentMethodField
+          control={control}
+          name="paymentMethod"
+          error={errors.paymentMethod?.message}
+          disabled={isPending}
+        />
+      </div>
 
       <FormField label={t("operations.comment")} error={errors.comment?.message}>
         <Textarea placeholder={t("common.optional")} rows={2} disabled={isPending} {...register("comment")} />

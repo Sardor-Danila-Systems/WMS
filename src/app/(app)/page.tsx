@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ChevronRight, HardHat, Package, TruckIcon } from "lucide-react";
+import { AlertTriangle, Blocks, ChevronRight, Coins, Package, TruckIcon } from "lucide-react";
 
 import { PageHeader } from "@/shared/components/page-header";
 import { StatCard } from "@/shared/components/stat-card";
@@ -12,15 +12,20 @@ import { getDashboardData, type PeriodTotals } from "@/server/queries";
 import { getOperationRefData } from "@/server/ref-data";
 import { getStockStatus, MOVEMENT_COLORS, MOVEMENT_TYPES } from "@/constants/colors";
 import { getIntlTag, getT, getValueTranslator } from "@/i18n/server";
-import { formatDate, formatQuantity } from "@/lib/format";
+import { formatDate, formatMoney, formatMoneyCompact, formatQuantity } from "@/lib/format";
 import type { MovementType } from "@/types";
 
-/** Порядок соответствует движению материала: пришло → выдали → израсходовали → вернули. */
+/** Порядок соответствует движению материала: пришло → ушло в блок → вернулось. */
 const TODAY_COUNT: Record<MovementType, (t: PeriodTotals) => number> = {
   RECEIPT: (t) => t.receiptCount,
   ISSUE: (t) => t.issueCount,
-  USAGE: (t) => t.usageCount,
   RETURN: (t) => t.returnCount,
+};
+
+const TODAY_AMOUNT: Record<MovementType, (t: PeriodTotals) => number> = {
+  RECEIPT: (t) => t.receiptAmount,
+  ISSUE: (t) => t.issueAmount,
+  RETURN: (t) => t.returnAmount,
 };
 
 export default async function DashboardPage() {
@@ -32,11 +37,15 @@ export default async function DashboardPage() {
   ]);
   const unitLabel = await getValueTranslator("units");
 
-  const todayTotal =
-    data.today.receiptCount + data.today.issueCount + data.today.usageCount + data.today.returnCount;
-  const weekTotal =
-    data.week.receiptCount + data.week.issueCount + data.week.usageCount + data.week.returnCount;
+  const total = (totals: PeriodTotals) =>
+    totals.receiptCount + totals.issueCount + totals.returnCount;
   const unitOf = (unit: string) => unitLabel(unit);
+  const currency = t("money.currency");
+  const compactSuffixes = {
+    thousand: t("money.thousand"),
+    million: t("money.million"),
+    billion: t("money.billion"),
+  };
 
   return (
     <div className="space-y-5">
@@ -52,9 +61,9 @@ export default async function DashboardPage() {
       />
 
       {/* Количества разных материалов намеренно не суммируются: тонны, штуки
-          и литры нельзя сложить в одно осмысленное число, поэтому итоги
-          показываются в позициях и операциях. */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          и литры нельзя сложить в одно осмысленное число. Сопоставимый итог
+          по всему складу даёт только сумма в деньгах. */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard
           label={t("dashboard.materialsCount")}
           value={String(data.materialsCount)}
@@ -63,29 +72,42 @@ export default async function DashboardPage() {
           tone="accent"
         />
         <StatCard
+          label={t("money.warehouseValue")}
+          value={`${formatMoneyCompact(data.warehouseValue, compactSuffixes, locale)} ${currency}`}
+          icon={Coins}
+          hint={t("money.warehouseValueHint")}
+          tone="positive"
+        />
+        <StatCard
           label={t("dashboard.lowStock")}
           value={String(data.lowStockMaterials.length)}
           icon={AlertTriangle}
-          hint={data.lowStockMaterials.length > 0 ? t("dashboard.lowStockHint") : t("dashboard.lowStockOk")}
+          hint={
+            data.lowStockMaterials.length > 0 ? t("dashboard.lowStockHint") : t("dashboard.lowStockOk")
+          }
           tone={data.lowStockMaterials.length > 0 ? "danger" : "neutral"}
         />
         <StatCard
-          label={t("dashboard.atForemen")}
-          value={t("dashboard.positions", { count: data.foremanPositions })}
-          icon={HardHat}
-          hint={t("dashboard.atForemenHint", { withStock: data.foremenWithStock, total: data.foremenCount, projects: data.projectsCount })}
+          label={t("dashboard.atBlocks")}
+          value={t("dashboard.positions", { count: data.blockPositions })}
+          icon={Blocks}
+          hint={t("dashboard.atBlocksHint", {
+            withStock: data.blocksWithStock,
+            total: data.blocksCount,
+            organizations: data.organizationsCount,
+          })}
           tone="warning"
         />
         <StatCard
           label={t("dashboard.todayOps")}
-          value={String(todayTotal)}
+          value={String(total(data.today))}
           icon={TruckIcon}
-          hint={t("dashboard.weekOps", { n: weekTotal })}
+          hint={t("dashboard.weekOps", { n: total(data.week) })}
           tone="neutral"
         />
       </div>
 
-      {/* Движение за сегодня — одной компактной строкой вместо четырёх карточек. */}
+      {/* Движение за сегодня — одной компактной строкой вместо трёх карточек. */}
       <div className="rounded-lg border border-border bg-card px-4 py-3">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           <span className="text-[12.5px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
@@ -99,6 +121,12 @@ export default async function DashboardPage() {
               />
               <span className="text-muted-foreground">{t(`movements.${type}`)}</span>
               <span className="font-semibold tabular-nums">{TODAY_COUNT[type](data.today)}</span>
+              {TODAY_AMOUNT[type](data.today) > 0 && (
+                <span className="tabular-nums text-muted-foreground">
+                  · {formatMoneyCompact(TODAY_AMOUNT[type](data.today), compactSuffixes, locale)}{" "}
+                  {currency}
+                </span>
+              )}
             </span>
           ))}
         </div>
@@ -167,12 +195,14 @@ export default async function DashboardPage() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[14.5px] font-medium">{movement.materialName}</div>
                   {/* Подписываем контрагента: иначе непонятно, чьё это имя —
-                      бригадира, поставщика или сотрудника склада. */}
+                      блока, поставщика или сотрудника склада. */}
                   <div className="truncate text-[13px] text-muted-foreground">
                     {formatQuantity(movement.quantity, unitOf(movement.unit), locale)}
-                    {movement.supplierName && ` · ${t("dashboard.fromSupplier", { name: movement.supplierName })}`}
-                    {movement.foremanName && ` · ${t("dashboard.foremanLabel", { name: movement.foremanName })}`}
-                    {movement.projectName && ` · ${movement.projectName}`}
+                    {movement.amount > 0 && ` · ${formatMoney(movement.amount, locale)} ${currency}`}
+                    {movement.supplierName &&
+                      ` · ${t("dashboard.fromSupplier", { name: movement.supplierName })}`}
+                    {movement.blockName &&
+                      ` · ${t("dashboard.blockLabel", { name: movement.blockName })}`}
                   </div>
                 </div>
                 <div className="shrink-0 whitespace-nowrap text-[13px] text-muted-foreground">

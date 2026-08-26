@@ -8,15 +8,27 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MOVEMENT_TYPES } from "@/constants/colors";
 import { useT } from "@/i18n/client";
-import type { Foreman, Material, Project, User } from "@/types";
+import type { Block, Material, Organization, Supplier, User } from "@/types";
 
 export const PERIOD_KEYS = ["all", "today", "7", "30", "90"] as const;
 
+/** Ключи фильтров — они же имена параметров в адресной строке. */
+export const FILTER_KEYS = [
+  "type",
+  "period",
+  "materialId",
+  "blockId",
+  "supplierId",
+  "organizationId",
+  "userId",
+] as const;
+
 interface HistoryFiltersProps {
   materials: Material[];
-  foremen: Foreman[];
+  blocks: Block[];
   users: User[];
-  projects: Project[];
+  organizations: Organization[];
+  suppliers: Supplier[];
   current: Record<string, string>;
 }
 
@@ -25,7 +37,14 @@ interface HistoryFiltersProps {
  * отбор выполняется на сервере, ссылку можно переслать коллеге,
  * а обновление страницы не сбрасывает выбранные условия.
  */
-export function HistoryFilters({ materials, foremen, users, projects, current }: HistoryFiltersProps) {
+export function HistoryFilters({
+  materials,
+  blocks,
+  users,
+  organizations,
+  suppliers,
+  current,
+}: HistoryFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -39,7 +58,7 @@ export function HistoryFilters({ materials, foremen, users, projects, current }:
     startTransition(() => router.replace(query ? `/history?${query}` : "/history", { scroll: false }));
   }
 
-  const activeCount = ["type", "materialId", "foremanId", "userId", "projectId", "period"].filter(
+  const activeCount = FILTER_KEYS.filter(
     (key) => current[key] && current[key] !== "all"
   ).length;
 
@@ -74,19 +93,27 @@ export function HistoryFilters({ materials, foremen, users, projects, current }:
       ],
     },
     {
-      key: "foremanId",
-      placeholder: t("operations.foreman"),
+      key: "blockId",
+      placeholder: t("operations.block"),
       options: [
-        { value: "all", label: t("history.filters.allForemen") },
-        ...foremen.map((f) => ({ value: f.id, label: f.name })),
+        { value: "all", label: t("history.filters.allBlocks") },
+        ...blocks.map((b) => ({ value: b.id, label: b.name })),
       ],
     },
     {
-      key: "projectId",
-      placeholder: t("operations.project"),
+      key: "supplierId",
+      placeholder: t("operations.supplier"),
       options: [
-        { value: "all", label: t("history.filters.allProjects") },
-        ...projects.map((p) => ({ value: p.id, label: p.name })),
+        { value: "all", label: t("history.filters.allSuppliers") },
+        ...suppliers.map((s) => ({ value: s.id, label: s.name })),
+      ],
+    },
+    {
+      key: "organizationId",
+      placeholder: t("operations.organization"),
+      options: [
+        { value: "all", label: t("history.filters.allOrganizations") },
+        ...organizations.map((o) => ({ value: o.id, label: o.name })),
       ],
     },
     {

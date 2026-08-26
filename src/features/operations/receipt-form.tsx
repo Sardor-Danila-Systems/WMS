@@ -1,12 +1,13 @@
 "use client";
 
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 
 import { createReceipt } from "@/app/actions/movements";
-import { receiptSchema } from "@/lib/validation";
-import { formatQuantity } from "@/lib/format";
+import { receiptSchema, lineAmount } from "@/lib/validation";
+import { formatMoney, formatQuantity } from "@/lib/format";
 import { useIntlTag, useT } from "@/i18n/client";
 import { useValueTranslator } from "@/i18n/values";
 import { FormField } from "@/shared/components/form-field";
@@ -14,22 +15,34 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
-import { SelectField, QuantityInput } from "./fields";
+import {
+  SelectField,
+  QuantityInput,
+  PriceInput,
+  AmountPreview,
+  PaymentMethodField,
+} from "./fields";
 import { todayISODate, useActionSubmit } from "./use-operation-form";
 import type { OperationRefData } from "./types";
 
 type Values = z.input<typeof receiptSchema>;
 
+/** Приход: поставщик → склад. Форма повторяет поля бумажной фактуры. */
 export function ReceiptForm({ data, onSuccess }: { data: OperationRefData; onSuccess: () => void }) {
   const t = useT();
   const unitLabel = useValueTranslator("units");
   const locale = useIntlTag();
   const unitOf = (unit: string) => unitLabel(unit);
+
+  // Организация обычно одна — подставляем её, чтобы не выбирать каждый раз.
+  const onlyOrganization = data.organizations.length === 1 ? data.organizations[0].id : "";
+
   const {
     register,
     handleSubmit,
     control,
     watch,
+    setValue,
     setError,
     formState: { errors },
   } = useForm<Values>({
@@ -37,27 +50,85 @@ export function ReceiptForm({ data, onSuccess }: { data: OperationRefData; onSuc
     defaultValues: {
       materialId: "",
       quantity: "" as unknown as number,
+      unitPrice: "",
       supplierId: "",
+      organizationId: onlyOrganization,
+      invoiceNumber: "",
       vehicleNumber: "",
+      paymentMethod: "",
       occurredAt: todayISODate(),
       comment: "",
     },
   });
 
-  const material = data.materials.find((m) => m.id === watch("materialId"));
+  const materialId = watch("materialId");
+  const material = data.materials.find((m) => m.id === materialId);
+  const quantity = Number(watch("quantity"));
+  const rawPrice = watch("unitPrice");
+  const unitPrice = rawPrice === "" || rawPrice === undefined ? null : Number(rawPrice);
+
+  // Цена подставляется из карточки материала — её остаётся только поправить,
+  // если поставщик привёз по другой цене.
+  useEffect(() => {
+    if (material && material.price > 0) setValue("unitPrice", material.price);
+  }, [material, setValue]);
+
   const { submit, isPending } = useActionSubmit<Values>({
     action: createReceipt,
     setError,
     successTitle: t("operations.receipt.success"),
     successDescription: (values) =>
       material
-        ? t("operations.receipt.successHint", { name: material.name, qty: formatQuantity(Number(values.quantity), unitOf(material.unit), locale) })
+        ? t("operations.receipt.successHint", {
+            name: material.name,
+            qty: formatQuantity(Number(values.quantity), unitOf(material.unit), locale),
+            amount: `${formatMoney(
+              lineAmount(Number(values.quantity), unitPrice ?? material.price),
+              locale
+            )} ${t("money.currency")}`,
+          })
         : undefined,
     onSuccess,
   });
 
   return (
     <form onSubmit={handleSubmit(submit)} className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label={t("operations.receipt.date")} required error={errors.occurredAt?.message}>
+          <Input type="date" max={todayISODate()} disabled={isPending} {...register("occurredAt")} />
+        </FormField>
+
+        <FormField label={t("operations.invoiceNumber")} error={errors.invoiceNumber?.message}>
+          <Input
+            placeholder={t("operations.invoicePlaceholder")}
+            disabled={isPending}
+            {...register("invoiceNumber")}
+          />
+        </FormField>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <SelectField
+          control={control}
+          name="supplierId"
+          label={t("operations.supplier")}
+          placeholder={t("operations.receipt.supplierPlaceholder")}
+          error={errors.supplierId?.message}
+          disabled={isPending}
+          options={data.suppliers.map((s) => ({ value: s.id, label: s.name }))}
+        />
+
+        <SelectField
+          control={control}
+          name="organizationId"
+          label={t("operations.organization")}
+          placeholder={t("operations.organizationPlaceholder")}
+          error={errors.organizationId?.message}
+          disabled={isPending}
+          options={data.organizations.map((o) => ({ value: o.id, label: o.name }))}
+        />
+      </div>
+
       <SelectField
         control={control}
         name="materialId"
@@ -92,25 +163,39 @@ export function ReceiptForm({ data, onSuccess }: { data: OperationRefData; onSuc
           />
         </FormField>
 
-        <FormField label={t("operations.receipt.date")} required error={errors.occurredAt?.message}>
-          <Input type="date" max={todayISODate()} disabled={isPending} {...register("occurredAt")} />
+        <FormField
+          label={material ? t("money.pricePerUnit", { unit: unitOf(material.unit) }) : t("money.unitPrice")}
+          error={errors.unitPrice?.message}
+        >
+          <PriceInput
+            invalid={Boolean(errors.unitPrice)}
+            disabled={isPending}
+            {...register("unitPrice")}
+          />
         </FormField>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <SelectField
-          control={control}
-          name="supplierId"
-          label={t("operations.supplier")}
-          placeholder={t("operations.receipt.supplierPlaceholder")}
-          error={errors.supplierId?.message}
-          disabled={isPending}
-          options={data.suppliers.map((s) => ({ value: s.id, label: s.name }))}
-        />
+      <AmountPreview
+        quantity={quantity}
+        unitPrice={unitPrice}
+        fallbackPrice={material?.price ?? 0}
+      />
 
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label={t("operations.vehicleNumber")} error={errors.vehicleNumber?.message}>
-          <Input placeholder={t("operations.vehiclePlaceholder")} disabled={isPending} {...register("vehicleNumber")} />
+          <Input
+            placeholder={t("operations.vehiclePlaceholder")}
+            disabled={isPending}
+            {...register("vehicleNumber")}
+          />
         </FormField>
+
+        <PaymentMethodField
+          control={control}
+          name="paymentMethod"
+          error={errors.paymentMethod?.message}
+          disabled={isPending}
+        />
       </div>
 
       <FormField label={t("operations.comment")} error={errors.comment?.message}>

@@ -1,113 +1,107 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Boxes, Hammer, PackageMinus, Phone, Undo2 } from "lucide-react";
+import { ArrowLeft, ArrowUpFromLine, Boxes, Coins, Undo2 } from "lucide-react";
 
 import {
-  getForeman,
-  getForemanMaterialTotals,
-  getForemanStock,
-  getForemenSummaries,
+  getBlock,
+  getBlockMaterialTotals,
+  getBlockStock,
+  getBlockSummaries,
   listMovements,
-  listProjects,
+  listOrganizations,
 } from "@/server/queries";
 import { getIntlTag, getT, getValueTranslator } from "@/i18n/server";
-import { formatQuantity } from "@/lib/format";
+import { formatMoney, formatQuantity } from "@/lib/format";
 import { StatCard } from "@/shared/components/stat-card";
 import { EmptyState } from "@/shared/components/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ForemanFormDialog } from "@/features/foremen/foreman-form-dialog";
+import { BlockFormDialog } from "@/features/blocks/block-form-dialog";
 import { MovementsTable } from "@/features/operations/movements-table";
 import { OperationDialog } from "@/features/operations/operation-dialog";
 import { getOperationRefData } from "@/server/ref-data";
 
-export default async function ForemanDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function BlockDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const foreman = await getForeman(id);
-  if (!foreman) notFound();
+  const block = await getBlock(id);
+  if (!block) notFound();
 
-  const [t, locale, stock, materialTotals, summaries, movements, refData, projects] =
+  const [t, locale, stock, materialTotals, summaries, movements, refData, organizations] =
     await Promise.all([
       getT(),
       getIntlTag(),
-      getForemanStock(id),
-      getForemanMaterialTotals(id),
-      getForemenSummaries(),
-      listMovements({ foremanId: id }),
+      getBlockStock(id),
+      getBlockMaterialTotals(id),
+      getBlockSummaries(),
+      listMovements({ blockId: id }),
       getOperationRefData(),
-      listProjects(),
+      listOrganizations(),
     ]);
   const unitLabel = await getValueTranslator("units");
 
   const summary = summaries.get(id);
   const unitOf = (unit: string) => unitLabel(unit);
+  const currency = t("money.currency");
 
   return (
     <div className="space-y-5">
       <div>
         <Link
-          href="/foremen"
+          href="/blocks"
           className="mb-3 inline-flex items-center gap-1.5 text-[14.5px] text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          {t("foremen.all")}
+          {t("blocks.all")}
         </Link>
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h2 className="text-lg font-semibold tracking-tight sm:text-[22px]">{foreman.name}</h2>
-              {!foreman.isActive && <Badge variant="outline">{t("foremen.inactive")}</Badge>}
+              <h2 className="text-lg font-semibold tracking-tight sm:text-[22px]">{block.name}</h2>
+              {!block.isActive && <Badge variant="outline">{t("blocks.inactive")}</Badge>}
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[14.5px] text-muted-foreground">
-              {foreman.brigade && <span>{foreman.brigade}</span>}
-              {foreman.projectName && <span>· {foreman.projectName}</span>}
-              {foreman.phone && (
-                <span className="inline-flex items-center gap-1">
-                  <Phone className="h-3 w-3" />
-                  {foreman.phone}
-                </span>
-              )}
+              {block.description && <span>{block.description}</span>}
+              {block.organizationName && <span>· {block.organizationName}</span>}
             </div>
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <OperationDialog type="ISSUE" data={refData} variant="outline" />
-            <OperationDialog type="USAGE" data={refData} variant="outline" />
             <OperationDialog type="RETURN" data={refData} variant="outline" />
-            <ForemanFormDialog foreman={foreman} projects={projects} />
+            <BlockFormDialog block={block} organizations={organizations} />
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
-          label={t("foremen.detail.positionsOnHand")}
+          label={t("blocks.detail.positionsOnHand")}
           value={String(stock.length)}
           icon={Boxes}
-          hint={stock.length > 0 ? t("foremen.detail.needsAction") : t("foremen.detail.allClosed")}
+          hint={stock.length > 0 ? t("blocks.detail.needsAction") : t("blocks.detail.allClosed")}
           tone={stock.length > 0 ? "warning" : "neutral"}
         />
         <StatCard
-          label={t("foremen.issueCount")}
+          label={t("blocks.issueCount")}
           value={String(summary?.issueCount ?? 0)}
-          icon={PackageMinus}
-          hint={t("foremen.detail.issuedHint")}
+          icon={ArrowUpFromLine}
+          hint={t("blocks.detail.issuedHint")}
           tone="accent"
         />
         <StatCard
-          label={t("foremen.usageCount")}
-          value={String(summary?.usageCount ?? 0)}
-          icon={Hammer}
-          hint={t("foremen.detail.usedHint")}
+          label={t("blocks.returnCount")}
+          value={String(summary?.returnCount ?? 0)}
+          icon={Undo2}
+          hint={t("blocks.detail.returnedHint")}
           tone="neutral"
         />
         <StatCard
-          label={t("foremen.returnCount")}
-          value={String(summary?.returnCount ?? 0)}
-          icon={Undo2}
-          hint={t("foremen.detail.returnedHint")}
+          label={t("blocks.amount")}
+          value={`${formatMoney(summary?.amount ?? 0, locale)} ${currency}`}
+          icon={Coins}
+          hint={t("blocks.detail.amountHint")}
           tone="neutral"
         />
       </div>
@@ -115,15 +109,15 @@ export default async function ForemanDetailPage({ params }: { params: Promise<{ 
       <Card>
         <CardHeader>
           <CardTitle className="text-[14.5px] font-semibold">
-            {t("foremen.detail.materialsTitle")}
+            {t("blocks.detail.materialsTitle")}
           </CardTitle>
-          <CardDescription className="text-[13px]">{t("foremen.detail.materialsHint")}</CardDescription>
+          <CardDescription className="text-[13px]">{t("blocks.detail.materialsHint")}</CardDescription>
         </CardHeader>
         <CardContent className="px-0 sm:px-6">
           {materialTotals.length === 0 ? (
             <EmptyState
-              message={t("foremen.detail.noMaterials")}
-              description={t("foremen.detail.noMaterialsHint")}
+              message={t("blocks.detail.noMaterials")}
+              description={t("blocks.detail.noMaterialsHint")}
             />
           ) : (
             <>
@@ -138,19 +132,19 @@ export default async function ForemanDetailPage({ params }: { params: Promise<{ 
                       {row.materialName}
                     </Link>
                     <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[13px]">
-                      <dt className="text-muted-foreground">{t("foremen.detail.received")}</dt>
+                      <dt className="text-muted-foreground">{t("blocks.detail.issued")}</dt>
                       <dd className="text-right tabular-nums">
-                        {formatQuantity(row.received, unitOf(row.unit), locale)}
+                        {formatQuantity(row.issued, unitOf(row.unit), locale)}
                       </dd>
-                      <dt className="text-muted-foreground">{t("foremen.detail.used")}</dt>
-                      <dd className="text-right tabular-nums">
-                        {formatQuantity(row.used, unitOf(row.unit), locale)}
-                      </dd>
-                      <dt className="text-muted-foreground">{t("foremen.detail.returned")}</dt>
+                      <dt className="text-muted-foreground">{t("blocks.detail.returned")}</dt>
                       <dd className="text-right tabular-nums">
                         {formatQuantity(row.returned, unitOf(row.unit), locale)}
                       </dd>
-                      <dt className="font-medium">{t("foremen.detail.onHand")}</dt>
+                      <dt className="text-muted-foreground">{t("blocks.detail.amount")}</dt>
+                      <dd className="text-right tabular-nums">
+                        {formatMoney(row.amount, locale)} {currency}
+                      </dd>
+                      <dt className="font-medium">{t("blocks.detail.onHand")}</dt>
                       <dd
                         className={
                           row.onHand > 0
@@ -173,16 +167,16 @@ export default async function ForemanDetailPage({ params }: { params: Promise<{ 
                         {t("operations.material")}
                       </TableHead>
                       <TableHead className="text-right text-[12.5px] font-medium uppercase text-muted-foreground">
-                        {t("foremen.detail.received")}
+                        {t("blocks.detail.issued")}
                       </TableHead>
                       <TableHead className="text-right text-[12.5px] font-medium uppercase text-muted-foreground">
-                        {t("foremen.detail.used")}
+                        {t("blocks.detail.returned")}
                       </TableHead>
                       <TableHead className="text-right text-[12.5px] font-medium uppercase text-muted-foreground">
-                        {t("foremen.detail.returned")}
+                        {t("blocks.detail.onHand")}
                       </TableHead>
                       <TableHead className="text-right text-[12.5px] font-medium uppercase text-muted-foreground">
-                        {t("foremen.detail.onHand")}
+                        {t("blocks.detail.amount")}
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -195,10 +189,7 @@ export default async function ForemanDetailPage({ params }: { params: Promise<{ 
                           </Link>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {formatQuantity(row.received, unitOf(row.unit), locale)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums text-muted-foreground">
-                          {formatQuantity(row.used, unitOf(row.unit), locale)}
+                          {formatQuantity(row.issued, unitOf(row.unit), locale)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums text-muted-foreground">
                           {formatQuantity(row.returned, unitOf(row.unit), locale)}
@@ -214,6 +205,9 @@ export default async function ForemanDetailPage({ params }: { params: Promise<{ 
                             </span>
                           )}
                         </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatMoney(row.amount, locale)}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -225,13 +219,13 @@ export default async function ForemanDetailPage({ params }: { params: Promise<{ 
       </Card>
 
       <div>
-        <h3 className="mb-2.5 text-[14.5px] font-semibold">{t("foremen.detail.history")}</h3>
+        <h3 className="mb-2.5 text-[14.5px] font-semibold">{t("blocks.detail.history")}</h3>
         <MovementsTable
           movements={movements}
-          columns={["type", "date", "material", "quantity", "project", "user", "reason", "comment"]}
+          columns={["type", "date", "material", "quantity", "amount", "user", "reason", "comment"]}
           pageSize={10}
-          emptyMessage={t("foremen.detail.noHistory")}
-          exportName={`brigadir-${foreman.name}`}
+          emptyMessage={t("blocks.detail.noHistory")}
+          exportName={`blok-${block.name}`}
         />
       </div>
     </div>

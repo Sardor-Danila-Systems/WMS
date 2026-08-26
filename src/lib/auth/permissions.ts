@@ -2,7 +2,7 @@ import type { Role } from "@/types";
 
 /**
  * Права ролей. ADMIN — всё; WAREHOUSE_WORKER — ежедневные складские операции
- * и просмотр, но не управление справочниками, сотрудниками и настройками.
+ * и просмотр, но не управление организациями, сотрудниками и настройками.
  *
  * Модуль намеренно без серверных зависимостей: те же правила нужны в браузере,
  * чтобы не показывать пункты меню, которые сервер всё равно отклонит.
@@ -13,9 +13,9 @@ export const PERMISSIONS = {
   // Справочники
   "material:write": ["ADMIN", "WAREHOUSE_WORKER"],
   "material:delete": ["ADMIN"],
-  "foreman:write": ["ADMIN", "WAREHOUSE_WORKER"],
-  "project:write": ["ADMIN"],
-  "supplier:write": ["ADMIN"],
+  "block:write": ["ADMIN", "WAREHOUSE_WORKER"],
+  "organization:write": ["ADMIN"],
+  "supplier:write": ["ADMIN", "WAREHOUSE_WORKER"],
   // Администрирование
   "user:write": ["ADMIN"],
   "settings:write": ["ADMIN"],

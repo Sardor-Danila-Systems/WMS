@@ -27,7 +27,7 @@ const consistency = await verifyLedgerConsistency();
 console.log(
   consistency.ok
     ? "\n✓ Остатки сходятся с журналом движений."
-    : `\n✗ Расхождения: ${consistency.materialMismatches.length} по материалам, ${consistency.foremanMismatches.length} по бригадирам`
+    : `\n✗ Расхождения: ${consistency.materialMismatches.length} по материалам, ${consistency.blockMismatches.length} по блокам`
 );
 if (!consistency.ok) {
   console.log(consistency.materialMismatches.slice(0, 5));

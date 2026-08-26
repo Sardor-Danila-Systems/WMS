@@ -11,7 +11,6 @@ import type { DailyActivity } from "@/server/queries";
 const SERIES = [
   { key: "receipts", type: "RECEIPT" as const },
   { key: "issues", type: "ISSUE" as const },
-  { key: "usages", type: "USAGE" as const },
   { key: "returns", type: "RETURN" as const },
 ];
 

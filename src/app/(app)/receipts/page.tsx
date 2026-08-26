@@ -21,9 +21,20 @@ export default async function Page() {
       />
       <MovementsTable
         movements={movements}
-        columns={["date", "material", "quantity", "stockAfter", "supplier", "vehicle", "acceptedBy", "comment"]}
+        columns={[
+          "date",
+          "invoice",
+          "material",
+          "quantity",
+          "price",
+          "amount",
+          "supplier",
+          "payment",
+          "vehicle",
+          "acceptedBy",
+        ]}
         emptyMessage={t("operations.receipt.empty")}
-        exportName="postuplenia"
+        exportName="prihod"
       />
     </div>
   );

@@ -19,7 +19,7 @@ export const USERS_SEED: UserSeed[] = [
     password: "admin123",
     fullName: "Игорь Соколов",
     position: "Начальник склада",
-    phone: "+7 (901) 234-56-01",
+    phone: "+998 (90) 234-56-01",
     role: "ADMIN",
   },
   {
@@ -27,7 +27,7 @@ export const USERS_SEED: UserSeed[] = [
     password: "sklad123",
     fullName: "Дмитрий Волков",
     position: "Старший кладовщик",
-    phone: "+7 (901) 234-56-02",
+    phone: "+998 (90) 234-56-02",
     role: "WAREHOUSE_WORKER",
   },
   {
@@ -35,7 +35,7 @@ export const USERS_SEED: UserSeed[] = [
     password: "sklad123",
     fullName: "Артём Ковалёв",
     position: "Кладовщик",
-    phone: "+7 (901) 234-56-03",
+    phone: "+998 (90) 234-56-03",
     role: "WAREHOUSE_WORKER",
   },
   {
@@ -43,7 +43,7 @@ export const USERS_SEED: UserSeed[] = [
     password: "sklad123",
     fullName: "Максим Петров",
     position: "Кладовщик",
-    phone: "+7 (901) 234-56-04",
+    phone: "+998 (90) 234-56-04",
     role: "WAREHOUSE_WORKER",
   },
   {
@@ -51,45 +51,45 @@ export const USERS_SEED: UserSeed[] = [
     password: "sklad123",
     fullName: "Виктор Орлов",
     position: "Учётчик склада",
-    phone: "+7 (901) 234-56-08",
+    phone: "+998 (90) 234-56-08",
     role: "WAREHOUSE_WORKER",
   },
 ];
 
-export const PROJECTS_SEED = [
-  { name: "ЖК «Северный парк», корпус 3", address: "г. Москва, ул. Дмитровская, 45" },
-  { name: "ЖК «Речная гавань», корпус 1", address: "г. Москва, Речной проезд, 12" },
-  { name: "Логистический центр «Восток»", address: "Московская обл., г. Балашиха, Промзона 4" },
-  { name: "Школа №142, реконструкция", address: "г. Москва, ул. Полярная, 8" },
-  { name: "Бизнес-центр «Меридиан»", address: "г. Москва, Ленинградское ш., 71" },
+export const ORGANIZATIONS_SEED = [
+  {
+    name: "Gagarin Avenue",
+    address: "Samarqand sh., Gagarin ko'chasi, 12",
+    inn: "305412876",
+    phone: "+998 (66) 233-40-10",
+  },
 ];
 
 export const SUPPLIERS_SEED = [
-  { name: "ООО «СтройИнвестПоставка»", contact: "+7 (495) 212-40-11" },
-  { name: "ТД «Металлопрокат Урал»", contact: "+7 (343) 350-22-87" },
-  { name: "ООО «КарьерСнаб»", contact: "+7 (495) 640-15-30" },
-  { name: "ЗАО «ЛакКрасПром»", contact: "+7 (812) 320-77-14" },
-  { name: "ООО «ГипсПрофСервис»", contact: "+7 (495) 980-63-22" },
-  { name: "ТД «ЛесПромТорг»", contact: "+7 (812) 445-91-08" },
-  { name: "ООО «ИзолТехСтрой»", contact: "+7 (495) 771-05-40" },
-  { name: "ТК «КрепёжОпт»", contact: "+7 (495) 500-18-63" },
+  { name: "ELECTRO", contact: "Далер", phone: "+998 (93) 344-00-40", inn: "302114765" },
+  { name: "SHTUKATUROF MCHJ", contact: "Отдел продаж", phone: "+998 (66) 210-55-18", inn: "306721904" },
+  { name: "SMZ DEMIR PROFIL", contact: "Бахтиеров Фаезжон", phone: "+998 (66) 231-77-02", inn: "301998432" },
+  { name: "SAM WOODMAX TRADE MCHJ", contact: "Отдел снабжения", phone: "+998 (66) 240-13-90", inn: "308445127" },
+  { name: "OSIYO KABEL SAVDO SAMARKAND MCHJ", contact: "Склад", phone: "+998 (66) 227-31-45", inn: "304556218" },
+  { name: "NASIMIY SOF CEMENT MCHJ", contact: "Отдел продаж", phone: "+998 (66) 219-08-77", inn: "307113650" },
+  { name: "LIDER METALL DIZAYN MCHJ", contact: "Менеджер", phone: "+998 (66) 244-62-01", inn: "305998741" },
+  { name: "MASTER MEGA PROFIL MCHJ", contact: "Отдел снабжения", phone: "+998 (66) 235-19-26", inn: "309223805" },
 ];
 
-export interface ForemanSeed {
+export interface BlockSeed {
   name: string;
-  phone: string;
-  brigade: string;
-  /** Индекс объекта в PROJECTS_SEED. */
-  projectIndex: number;
+  description: string;
+  sortOrder: number;
 }
 
-export const FOREMEN_SEED: ForemanSeed[] = [
-  { name: "Александр Быков", phone: "+7 (902) 345-67-01", brigade: "Бригада №1 (монолит)", projectIndex: 0 },
-  { name: "Евгений Титов", phone: "+7 (902) 345-67-02", brigade: "Бригада №2 (кладка)", projectIndex: 0 },
-  { name: "Владимир Гусев", phone: "+7 (902) 345-67-03", brigade: "Бригада №3 (монолит)", projectIndex: 1 },
-  { name: "Андрей Смирнов", phone: "+7 (902) 345-67-04", brigade: "Бригада №4 (кладка)", projectIndex: 1 },
-  { name: "Олег Фёдоров", phone: "+7 (902) 345-67-05", brigade: "Бригада №5 (фасад)", projectIndex: 2 },
-  { name: "Денис Егоров", phone: "+7 (902) 345-67-06", brigade: "Бригада №6 (отделка)", projectIndex: 3 },
-  { name: "Константин Никитин", phone: "+7 (902) 345-67-07", brigade: "Бригада №7 (кровля)", projectIndex: 2 },
-  { name: "Руслан Абрамов", phone: "+7 (902) 345-67-08", brigade: "Бригада №8 (инженерные сети)", projectIndex: 4 },
+/**
+ * Блоки стройки A–E. Порядок задаётся явно: в списке они должны идти
+ * как на площадке, а не по алфавиту базы.
+ */
+export const BLOCKS_SEED: BlockSeed[] = [
+  { name: "A", description: "Блок A", sortOrder: 0 },
+  { name: "B", description: "Блок B", sortOrder: 1 },
+  { name: "C", description: "Блок C", sortOrder: 2 },
+  { name: "D", description: "Блок D", sortOrder: 3 },
+  { name: "E", description: "Блок E", sortOrder: 4 },
 ];

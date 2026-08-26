@@ -21,12 +21,6 @@ export const MOVEMENT_COLORS: Record<
     text: "text-[#9c4d16]",
     border: "border-[#f3ddc4]",
   },
-  USAGE: {
-    color: "#12776a",
-    bg: "bg-[#eaf6f4]",
-    text: "text-[#0e5f55]",
-    border: "border-[#c7e5e0]",
-  },
   RETURN: {
     color: "#5b4bb0",
     bg: "bg-[#f1effa]",
@@ -35,7 +29,7 @@ export const MOVEMENT_COLORS: Record<
   },
 };
 
-export const MOVEMENT_TYPES: MovementType[] = ["RECEIPT", "ISSUE", "USAGE", "RETURN"];
+export const MOVEMENT_TYPES: MovementType[] = ["RECEIPT", "ISSUE", "RETURN"];
 
 /** Статусная палитра (фиксирована, не используется для категориальных серий). */
 export const STOCK_STATUS_COLORS = {

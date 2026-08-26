@@ -14,6 +14,7 @@
     "test:concurrency": "node --no-warnings --env-file-if-exists=.env --import ./scripts/register-alias.mjs scripts/test-concurrency.ts",
     "db:migrate": "prisma migrate deploy",
     "db:create-admin": "node --no-warnings --env-file-if-exists=.env --import ./scripts/register-alias.mjs scripts/create-admin.ts",
+    "db:bootstrap": "node --no-warnings --env-file-if-exists=.env --import ./scripts/register-alias.mjs scripts/bootstrap.ts",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",

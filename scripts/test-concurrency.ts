@@ -13,7 +13,7 @@
 import { db, getPrisma } from "@/lib/db/client";
 import { seedDatabase } from "@/lib/db/seed";
 import { recordMovement, verifyLedgerConsistency } from "@/server/movements";
-import { createForeman, createMaterial } from "@/server/catalog";
+import { createBlock, createMaterial } from "@/server/catalog";
 import { getMaterial } from "@/server/queries";
 import { BusinessError } from "@/server/errors";
 
@@ -21,25 +21,26 @@ await seedDatabase({ reset: true, skipHistory: true });
 
 const admin = await db.user.findUniqueOrThrow({ where: { username: "admin" }, select: { id: true } });
 
-// Оставляем ровно один материал и одного бригадира, чтобы все транзакции
+// Оставляем ровно один материал и один блок, чтобы все транзакции
 // боролись за одну и ту же строку.
 await db.material.deleteMany();
-await db.foreman.deleteMany();
+await db.block.deleteMany();
 
 const { id: materialId } = await createMaterial({
   name: "Дефицитный материал",
   category: "Прочее",
   unit: "шт",
+  price: 1000,
   minStock: 0,
   initialQuantity: 100,
   userId: admin.id,
   initialStockComment: "Начальный остаток",
 });
-const { id: foremanId } = await createForeman({
-  name: "Бригадир",
-  phone: "",
-  brigade: "",
-  projectId: "",
+const { id: blockId } = await createBlock({
+  name: "A",
+  description: "",
+  organizationId: "",
+  sortOrder: 0,
   isActive: true,
 });
 
@@ -53,7 +54,7 @@ const attempts = await Promise.all(
         materialId,
         quantity: 30,
         userId: admin.id,
-        foremanId,
+        blockId,
         occurredAt: new Date().toISOString(),
       });
       return "OK";

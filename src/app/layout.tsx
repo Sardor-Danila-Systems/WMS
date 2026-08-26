@@ -7,11 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "@/i18n/server";
 
-/**
- * Golos Text спроектирован для кириллических интерфейсов: у него ровный ритм
- * и хорошо читаемые цифры, что важно для плотных складских таблиц.
- * Латиница поддерживается полностью — нужна для узбекского.
- */
+
 const sans = Golos_Text({
   variable: "--font-geist-sans",
   subsets: ["latin", "cyrillic"],

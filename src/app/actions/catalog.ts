@@ -6,24 +6,26 @@ import { requirePermission } from "@/lib/auth/dal";
 import { getIntlTag, getLooseT, getT, getValueTranslator } from "@/i18n/server";
 import { translateValidation } from "@/i18n/validation";
 import {
-  foremanSchema,
+  blockSchema,
+  materialPriceSchema,
   materialSchema,
-  projectSchema,
+  organizationSchema,
   supplierSchema,
   userSchema,
 } from "@/lib/validation";
 import {
-  createForeman,
+  createBlock,
   createMaterial,
-  createProject,
+  createOrganization,
   createSupplier,
   createUser,
   deleteMaterial,
   setMaterialArchived,
   setSetting,
-  updateForeman,
+  updateBlock,
   updateMaterial,
-  updateProject,
+  updateMaterialPrice,
+  updateOrganization,
   updateSupplier,
   updateUser,
 } from "@/server/catalog";
@@ -46,6 +48,18 @@ async function firstIssue(error: { issues: { message: string; path: PropertyKey[
   };
 }
 
+async function crash(error: unknown) {
+  return {
+    ok: false as const,
+    ...toActionError(
+      error,
+      await getLooseT(),
+      await getIntlTag(),
+      await getValueTranslator("units")
+    ),
+  };
+}
+
 /* ------------------------------ Материалы ---------------------------- */
 
 export async function saveMaterial(formData: FormData): Promise<ActionResult<{ id: string }>> {
@@ -60,6 +74,7 @@ export async function saveMaterial(formData: FormData): Promise<ActionResult<{ i
         name: parsed.data.name,
         category: parsed.data.category,
         unit: parsed.data.unit,
+        price: parsed.data.price,
         minStock: parsed.data.minStock,
       });
       refresh();
@@ -70,6 +85,7 @@ export async function saveMaterial(formData: FormData): Promise<ActionResult<{ i
       name: parsed.data.name,
       category: parsed.data.category,
       unit: parsed.data.unit,
+      price: parsed.data.price,
       minStock: parsed.data.minStock,
       initialQuantity: parsed.data.initialQuantity,
       userId: user.id,
@@ -78,15 +94,22 @@ export async function saveMaterial(formData: FormData): Promise<ActionResult<{ i
     refresh();
     return { ok: true, data: created };
   } catch (error) {
-    return {
-      ok: false,
-      ...toActionError(
-        error,
-        await getLooseT(),
-        await getIntlTag(),
-        await getValueTranslator("units")
-      ),
-    };
+    return await crash(error);
+  }
+}
+
+/** Быстрая правка цены прямо в списке материалов. */
+export async function saveMaterialPrice(formData: FormData): Promise<ActionResult<{ id: string }>> {
+  try {
+    await requirePermission("material:write");
+    const parsed = materialPriceSchema.safeParse(parseForm(formData));
+    if (!parsed.success) return await firstIssue(parsed.error);
+
+    await updateMaterialPrice(parsed.data.id, parsed.data.price);
+    refresh();
+    return { ok: true, data: { id: parsed.data.id } };
+  } catch (error) {
+    return await crash(error);
   }
 }
 
@@ -97,15 +120,7 @@ export async function removeMaterial(id: string): Promise<ActionResult> {
     refresh();
     return { ok: true };
   } catch (error) {
-    return {
-      ok: false,
-      ...toActionError(
-        error,
-        await getLooseT(),
-        await getIntlTag(),
-        await getValueTranslator("units")
-      ),
-    };
+    return await crash(error);
   }
 }
 
@@ -116,81 +131,57 @@ export async function archiveMaterial(id: string, archived: boolean): Promise<Ac
     refresh();
     return { ok: true };
   } catch (error) {
-    return {
-      ok: false,
-      ...toActionError(
-        error,
-        await getLooseT(),
-        await getIntlTag(),
-        await getValueTranslator("units")
-      ),
-    };
+    return await crash(error);
   }
 }
 
-/* ------------------------------ Бригадиры ---------------------------- */
+/* -------------------------------- Блоки ------------------------------ */
 
-export async function saveForeman(formData: FormData): Promise<ActionResult<{ id: string }>> {
+export async function saveBlock(formData: FormData): Promise<ActionResult<{ id: string }>> {
   try {
-    await requirePermission("foreman:write");
+    await requirePermission("block:write");
     const id = String(formData.get("id") ?? "").trim();
-    const parsed = foremanSchema.safeParse({
+    const parsed = blockSchema.safeParse({
       ...parseForm(formData),
       isActive: formData.get("isActive") !== "false",
     });
     if (!parsed.success) return await firstIssue(parsed.error);
 
     if (id) {
-      await updateForeman(id, parsed.data);
+      await updateBlock(id, parsed.data);
       refresh();
       return { ok: true, data: { id } };
     }
-    const created = await createForeman(parsed.data);
+    const created = await createBlock(parsed.data);
     refresh();
     return { ok: true, data: created };
   } catch (error) {
-    return {
-      ok: false,
-      ...toActionError(
-        error,
-        await getLooseT(),
-        await getIntlTag(),
-        await getValueTranslator("units")
-      ),
-    };
+    return await crash(error);
   }
 }
 
-/* -------------------------------- Объекты ---------------------------- */
+/* ----------------------------- Организации --------------------------- */
 
-export async function saveProject(formData: FormData): Promise<ActionResult<{ id: string }>> {
+export async function saveOrganization(formData: FormData): Promise<ActionResult<{ id: string }>> {
   try {
-    await requirePermission("project:write");
+    await requirePermission("organization:write");
     const id = String(formData.get("id") ?? "").trim();
-    const parsed = projectSchema.safeParse({
+    const parsed = organizationSchema.safeParse({
       ...parseForm(formData),
       isActive: formData.get("isActive") !== "false",
     });
     if (!parsed.success) return await firstIssue(parsed.error);
 
     if (id) {
-      await updateProject(id, parsed.data);
+      await updateOrganization(id, parsed.data);
       refresh();
       return { ok: true, data: { id } };
     }
-    const created = await createProject(parsed.data);
+    const created = await createOrganization(parsed.data);
     refresh();
     return { ok: true, data: created };
   } catch (error) {
-    return {
-      ok: false,
-      ...toActionError(
-        error,
-        await getLooseT(),
-        await getIntlTag(),
-        await getValueTranslator("units")
-      ),
-    };
+    return await crash(error);
   }
 }
 
@@ -215,15 +206,7 @@ export async function saveSupplier(formData: FormData): Promise<ActionResult<{ i
     refresh();
     return { ok: true, data: created };
   } catch (error) {
-    return {
-      ok: false,
-      ...toActionError(
-        error,
-        await getLooseT(),
-        await getIntlTag(),
-        await getValueTranslator("units")
-      ),
-    };
+    return await crash(error);
   }
 }
 
@@ -264,15 +247,7 @@ export async function saveUser(formData: FormData): Promise<ActionResult<{ id: s
     refresh();
     return { ok: true, data: created };
   } catch (error) {
-    return {
-      ok: false,
-      ...toActionError(
-        error,
-        await getLooseT(),
-        await getIntlTag(),
-        await getValueTranslator("units")
-      ),
-    };
+    return await crash(error);
   }
 }
 
@@ -283,17 +258,10 @@ export async function saveSettings(formData: FormData): Promise<ActionResult> {
     await requirePermission("settings:write");
     await setSetting("company_name", String(formData.get("companyName") ?? "").trim());
     await setSetting("warehouse_address", String(formData.get("warehouseAddress") ?? "").trim());
+    await setSetting("currency", String(formData.get("currency") ?? "").trim());
     refresh();
     return { ok: true };
   } catch (error) {
-    return {
-      ok: false,
-      ...toActionError(
-        error,
-        await getLooseT(),
-        await getIntlTag(),
-        await getValueTranslator("units")
-      ),
-    };
+    return await crash(error);
   }
 }

@@ -23,8 +23,8 @@ console.log(`База: ${target}\n`);
 const before = {
   Движения: await db.stockMovement.count(),
   Материалы: await db.material.count(),
-  Бригадиры: await db.foreman.count(),
-  Объекты: await db.project.count(),
+  Блоки: await db.block.count(),
+  Организации: await db.organization.count(),
   Поставщики: await db.supplier.count(),
   Сотрудники: await db.user.count(),
 };
@@ -33,11 +33,11 @@ console.table(before);
 
 // Порядок важен: сначала зависимые таблицы, потом справочники.
 await db.stockMovement.deleteMany();
-await db.foremanStock.deleteMany();
+await db.blockStock.deleteMany();
 await db.session.deleteMany();
-await db.foreman.deleteMany();
+await db.block.deleteMany();
 await db.material.deleteMany();
-await db.project.deleteMany();
+await db.organization.deleteMany();
 await db.supplier.deleteMany();
 await db.user.deleteMany();
 await db.setting.deleteMany();
@@ -59,8 +59,8 @@ console.log("  Смените пароль в разделе «Сотрудни�
 const after = {
   Движения: await db.stockMovement.count(),
   Материалы: await db.material.count(),
-  Бригадиры: await db.foreman.count(),
-  Объекты: await db.project.count(),
+  Блоки: await db.block.count(),
+  Организации: await db.organization.count(),
   Поставщики: await db.supplier.count(),
   Сотрудники: await db.user.count(),
 };

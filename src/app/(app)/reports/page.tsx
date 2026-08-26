@@ -1,6 +1,6 @@
 import { PageHeader } from "@/shared/components/page-header";
 import { ReportsView } from "@/features/reports/reports-view";
-import { getForemanReport, getProjectReport, getStockReport } from "@/server/queries";
+import { getBlockReport, getStockReport, getSupplierReport } from "@/server/queries";
 import { getT } from "@/i18n/server";
 
 /** Период отчёта в дату начала выборки. */
@@ -22,17 +22,17 @@ export default async function ReportsPage({
   const period = typeof params.period === "string" ? params.period : "all";
   const from = periodToFrom(period);
 
-  const [t, stock, foremen, projects] = await Promise.all([
+  const [t, stock, blocks, suppliers] = await Promise.all([
     getT(),
     getStockReport(from),
-    getForemanReport(from),
-    getProjectReport(from),
+    getBlockReport(from),
+    getSupplierReport(from),
   ]);
 
   return (
     <div>
       <PageHeader title={t("reports.title")} description={t("reports.subtitle")} />
-      <ReportsView stock={stock} foremen={foremen} projects={projects} period={period} />
+      <ReportsView stock={stock} blocks={blocks} suppliers={suppliers} period={period} />
     </div>
   );
 }

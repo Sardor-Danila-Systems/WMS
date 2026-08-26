@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Boxes, HardHat, PackageCheck, TrendingDown } from "lucide-react";
+import { ArrowLeft, Blocks, Boxes, Coins, PackageCheck, TrendingDown } from "lucide-react";
 
 import { getCurrentUser, roleCan } from "@/lib/auth/dal";
 import {
@@ -8,12 +8,13 @@ import {
   getMaterial,
   getMaterialBalanceHistory,
   getMaterialHolders,
+  getMaterialPriceHistory,
   getMaterialTotals,
   listMovements,
 } from "@/server/queries";
 import { getStockStatus } from "@/constants/colors";
 import { getIntlTag, getT, getValueTranslator } from "@/i18n/server";
-import { formatQuantity } from "@/lib/format";
+import { formatDate, formatMoney, formatQuantity } from "@/lib/format";
 import { StatCard } from "@/shared/components/stat-card";
 import { StockStatusBadge } from "@/shared/components/status-badge";
 import { EmptyState } from "@/shared/components/empty-state";
@@ -28,7 +29,7 @@ export default async function MaterialDetailPage({ params }: { params: Promise<{
   const material = await getMaterial(id);
   if (!material) notFound();
 
-  const [t, locale, user, movementCount, totals, holders, movements, balanceHistory] =
+  const [t, locale, user, movementCount, totals, holders, movements, balanceHistory, priceHistory] =
     await Promise.all([
       getT(),
       getIntlTag(),
@@ -38,13 +39,16 @@ export default async function MaterialDetailPage({ params }: { params: Promise<{
       getMaterialHolders(id),
       listMovements({ materialId: id }),
       getMaterialBalanceHistory(id, 30),
+      getMaterialPriceHistory(id),
     ]);
   const unitLabel = await getValueTranslator("units");
   const categoryLabel = await getValueTranslator("categories");
 
   const status = getStockStatus(material.quantity, material.minStock);
   const unit = unitLabel(material.unit);
+  const currency = t("money.currency");
   const qty = (value: number) => formatQuantity(value, unit, locale);
+  const money = (value: number) => `${formatMoney(value, locale)} ${currency}`;
 
   return (
     <div className="space-y-5">
@@ -66,8 +70,8 @@ export default async function MaterialDetailPage({ params }: { params: Promise<{
               <StockStatusBadge status={status} />
             </div>
             <p className="mt-1 text-[14.5px] text-muted-foreground">
-              {categoryLabel(material.category)} · {t("materials.detail.unitLabel")}:{" "}
-              {unit}
+              {categoryLabel(material.category)} · {t("materials.detail.unitLabel")}: {unit}
+              {material.price > 0 && ` · ${money(material.price)} / ${unit}`}
             </p>
           </div>
 
@@ -80,7 +84,7 @@ export default async function MaterialDetailPage({ params }: { params: Promise<{
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard
           label={t("materials.detail.inStock")}
           value={qty(material.quantity)}
@@ -89,12 +93,23 @@ export default async function MaterialDetailPage({ params }: { params: Promise<{
           tone={status === "critical" ? "danger" : status === "warning" ? "warning" : "accent"}
         />
         <StatCard
-          label={t("materials.detail.atForemen")}
-          value={qty(material.atForemen)}
-          icon={HardHat}
+          label={t("materials.detail.stockValue")}
+          value={money(material.quantity * material.price)}
+          icon={Coins}
+          hint={
+            material.price > 0
+              ? `${t("money.currentPrice")}: ${money(material.price)}`
+              : t("money.noPrice")
+          }
+          tone="neutral"
+        />
+        <StatCard
+          label={t("materials.detail.atBlocks")}
+          value={qty(material.atBlocks)}
+          icon={Blocks}
           hint={
             holders.length > 0
-              ? t("materials.detail.foremenCount", { n: holders.length })
+              ? t("materials.detail.blocksCount", { n: holders.length })
               : t("materials.detail.nobody")
           }
           tone="warning"
@@ -103,12 +118,12 @@ export default async function MaterialDetailPage({ params }: { params: Promise<{
           label={t("materials.detail.totalReceived")}
           value={qty(totals.received)}
           icon={PackageCheck}
-          hint={t("materials.detail.allTime")}
+          hint={money(totals.receivedAmount)}
           tone="neutral"
         />
         <StatCard
-          label={t("materials.detail.used")}
-          value={qty(totals.used)}
+          label={t("materials.detail.issued")}
+          value={qty(totals.issued)}
           icon={TrendingDown}
           hint={t("materials.detail.returned", { value: qty(totals.returned) })}
           tone="neutral"
@@ -135,13 +150,15 @@ export default async function MaterialDetailPage({ params }: { params: Promise<{
             )}
             {holders.map((holder) => (
               <Link
-                key={holder.foremanId}
-                href={`/foremen/${holder.foremanId}`}
+                key={holder.blockId}
+                href={`/blocks/${holder.blockId}`}
                 className="flex items-center justify-between gap-3 rounded-md px-2 py-2 transition-colors hover:bg-muted/60"
               >
                 <div className="min-w-0">
-                  <div className="truncate text-[14.5px] font-medium">{holder.foremanName}</div>
-                  <div className="truncate text-[13px] text-muted-foreground">{holder.brigade}</div>
+                  <div className="truncate text-[14.5px] font-medium">{holder.blockName}</div>
+                  <div className="truncate text-[13px] text-muted-foreground">
+                    {holder.description || "—"}
+                  </div>
                 </div>
                 <span className="shrink-0 text-[14.5px] font-medium tabular-nums">
                   {qty(holder.quantity)}
@@ -152,6 +169,29 @@ export default async function MaterialDetailPage({ params }: { params: Promise<{
         </Card>
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-[14.5px] font-semibold">{t("money.priceHistory")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-0.5">
+          {priceHistory.length === 0 && <EmptyState message={t("money.noPriceHistory")} />}
+          {priceHistory.map((entry) => (
+            <div
+              key={entry.id}
+              className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-[14.5px]"
+            >
+              <span className="whitespace-nowrap text-muted-foreground">
+                {formatDate(entry.occurredAt, locale)}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                {entry.supplierName ?? ""}
+              </span>
+              <span className="shrink-0 font-medium tabular-nums">{money(entry.unitPrice)}</span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
       <div>
         <h3 className="mb-2.5 text-[14.5px] font-semibold">{t("materials.detail.history")}</h3>
         <MovementsTable
@@ -160,11 +200,12 @@ export default async function MaterialDetailPage({ params }: { params: Promise<{
             "type",
             "date",
             "quantity",
+            "price",
+            "amount",
             "delta",
             "stockAfter",
-            "foreman",
+            "block",
             "supplier",
-            "project",
             "user",
           ]}
           pageSize={10}

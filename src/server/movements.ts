@@ -1,35 +1,40 @@
 import "@/lib/server-only";
 
 import { db, transaction, type Tx } from "@/lib/db/client";
-import { roundQty } from "@/lib/validation";
-import type { MovementType } from "@/types";
+import { roundMoney, roundQty } from "@/lib/validation";
+import type { MovementType, PaymentMethod } from "@/types";
 import { BusinessError } from "./errors";
 
 export interface RecordMovementInput {
   type: MovementType;
   materialId: string;
   quantity: number;
+  /** Цена за единицу. Не задана — берётся текущая цена материала. */
+  unitPrice?: number | null;
   /** Сотрудник склада, проводящий операцию. */
   userId: string;
   occurredAt: string;
-  foremanId?: string | null;
+  blockId?: string | null;
   supplierId?: string | null;
-  projectId?: string | null;
+  organizationId?: string | null;
+  invoiceNumber?: string;
   vehicleNumber?: string;
+  paymentMethod?: PaymentMethod | null;
   reason?: string;
   comment?: string;
+  /** Идентификатор документа-источника в 1С — защита от повторного импорта. */
+  externalId?: string | null;
 }
 
 /**
  * Как каждый тип операции меняет два остатка.
- * Склад и бригадир всегда меняются согласованно, поэтому таблица — единственное
+ * Склад и блок всегда меняются согласованно, поэтому таблица — единственное
  * место, где задаётся направление движения.
  */
-const DELTAS: Record<MovementType, { warehouse: 1 | -1 | 0; foreman: 1 | -1 | 0; needsForeman: boolean }> = {
-  RECEIPT: { warehouse: 1, foreman: 0, needsForeman: false },
-  ISSUE: { warehouse: -1, foreman: 1, needsForeman: true },
-  USAGE: { warehouse: 0, foreman: -1, needsForeman: true },
-  RETURN: { warehouse: 1, foreman: -1, needsForeman: true },
+const DELTAS: Record<MovementType, { warehouse: 1 | -1 | 0; block: 1 | -1 | 0; needsBlock: boolean }> = {
+  RECEIPT: { warehouse: 1, block: 0, needsBlock: false },
+  ISSUE: { warehouse: -1, block: 1, needsBlock: true },
+  RETURN: { warehouse: 1, block: -1, needsBlock: true },
 };
 
 export function recordMovement(input: RecordMovementInput): Promise<{ movementId: string }> {
@@ -63,15 +68,17 @@ export async function recordMovementInTx(
     throw new BusinessError("DATE_INVALID", { field: "occurredAt" });
   }
 
-  const foremanId = input.foremanId?.trim() || null;
-  if (rules.needsForeman && !foremanId) {
-    throw new BusinessError("FOREMAN_REQUIRED", { field: "foremanId" });
+  const blockId = input.blockId?.trim() || null;
+  if (rules.needsBlock && !blockId) {
+    throw new BusinessError("BLOCK_REQUIRED", { field: "blockId" });
   }
 
   // FOR UPDATE блокирует строку материала до конца транзакции: параллельная
   // операция дождётся коммита и увидит уже уменьшенный остаток.
-  const locked = await tx.$queryRaw<{ id: string; name: string; unit: string; quantity: number; is_active: boolean }[]>`
-    SELECT id, name, unit, quantity, is_active FROM materials WHERE id = ${input.materialId} FOR UPDATE
+  const locked = await tx.$queryRaw<
+    { id: string; name: string; unit: string; quantity: number; price: number; is_active: boolean }[]
+  >`
+    SELECT id, name, unit, quantity, price, is_active FROM materials WHERE id = ${input.materialId} FOR UPDATE
   `;
   const material = locked[0];
 
@@ -80,19 +87,45 @@ export async function recordMovementInTx(
     throw new BusinessError("MATERIAL_ARCHIVED", { field: "materialId" });
   }
 
-  if (foremanId) {
-    const foreman = await tx.foreman.findUnique({
-      where: { id: foremanId },
+  if (blockId) {
+    const block = await tx.block.findUnique({
+      where: { id: blockId },
       select: { id: true, isActive: true },
     });
-    if (!foreman) throw new BusinessError("FOREMAN_NOT_FOUND", { field: "foremanId" });
-    if (!foreman.isActive) {
-      throw new BusinessError("FOREMAN_INACTIVE", { field: "foremanId" });
+    if (!block) throw new BusinessError("BLOCK_NOT_FOUND", { field: "blockId" });
+    if (!block.isActive) {
+      throw new BusinessError("BLOCK_INACTIVE", { field: "blockId" });
     }
   }
 
+  // --- Цена и сумма ----------------------------------------------------
+  // Цена не задана — подставляем её сами, чтобы сумма в журнале была
+  // осмысленной даже когда оператор её не вводил.
+  //
+  // Возврат оценивается по цене, по которой материал уходил в этот блок,
+  // а не по сегодняшней: иначе подорожавший материал возвращался бы дороже,
+  // чем выдавался, и расход блока в деньгах уходил бы в минус.
+  let defaultPrice = material.price;
+  if (input.type === "RETURN" && blockId) {
+    const lastIssue = await tx.$queryRaw<{ unit_price: number }[]>`
+      SELECT unit_price FROM stock_movements
+       WHERE type = 'ISSUE' AND block_id = ${blockId} AND material_id = ${material.id}
+         AND unit_price > 0
+       ORDER BY occurred_at DESC, seq DESC
+       LIMIT 1
+    `;
+    if (lastIssue[0]) defaultPrice = lastIssue[0].unit_price;
+  }
+
+  const rawPrice = input.unitPrice ?? defaultPrice;
+  const unitPrice = roundMoney(Number(rawPrice) || 0);
+  if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+    throw new BusinessError("PRICE_NEGATIVE", { field: "unitPrice" });
+  }
+  const amount = roundMoney(quantity * unitPrice);
+
   const warehouseDelta = roundQty(quantity * rules.warehouse);
-  const foremanDelta = roundQty(quantity * rules.foreman);
+  const blockDelta = roundQty(quantity * rules.block);
 
   // --- Проверка склада -------------------------------------------------
   const warehouseAfter = roundQty(material.quantity + warehouseDelta);
@@ -103,25 +136,22 @@ export async function recordMovementInTx(
     });
   }
 
-  // --- Проверка остатка у бригадира ------------------------------------
-  let foremanAfter: number | null = null;
-  let foremanBefore = 0;
-  if (foremanId) {
+  // --- Проверка количества, числящегося за блоком ----------------------
+  let blockAfter: number | null = null;
+  if (blockId) {
     const held = await tx.$queryRaw<{ quantity: number }[]>`
-      SELECT quantity FROM foreman_stock
-       WHERE foreman_id = ${foremanId} AND material_id = ${material.id}
+      SELECT quantity FROM block_stock
+       WHERE block_id = ${blockId} AND material_id = ${material.id}
        FOR UPDATE
     `;
-    foremanBefore = held[0]?.quantity ?? 0;
-    foremanAfter = roundQty(foremanBefore + foremanDelta);
+    const blockBefore = held[0]?.quantity ?? 0;
+    blockAfter = roundQty(blockBefore + blockDelta);
 
-    if (foremanAfter < 0) {
-      throw new BusinessError(
-        input.type === "RETURN"
-          ? "INSUFFICIENT_FOREMAN_STOCK_RETURN"
-          : "INSUFFICIENT_FOREMAN_STOCK_USAGE",
-        { field: "quantity", amount: { value: foremanBefore, unit: material.unit } }
-      );
+    if (blockAfter < 0) {
+      throw new BusinessError("INSUFFICIENT_BLOCK_STOCK", {
+        field: "quantity",
+        amount: { value: blockBefore, unit: material.unit },
+      });
     }
   }
 
@@ -131,35 +161,48 @@ export async function recordMovementInTx(
       type: input.type,
       materialId: material.id,
       quantity,
+      unitPrice,
+      amount,
       occurredAt: occurred,
       userId: input.userId,
-      foremanId,
+      blockId,
       supplierId: input.supplierId?.trim() || null,
-      projectId: input.projectId?.trim() || null,
+      organizationId: input.organizationId?.trim() || null,
+      invoiceNumber: input.invoiceNumber?.trim() ?? "",
       vehicleNumber: input.vehicleNumber?.trim() ?? "",
+      paymentMethod: input.paymentMethod ?? null,
       reason: input.reason?.trim() ?? "",
       comment: input.comment?.trim() ?? "",
+      externalId: input.externalId?.trim() || null,
       warehouseDelta,
-      foremanDelta,
+      blockDelta,
       warehouseAfter,
-      foremanAfter,
+      blockAfter,
     },
     select: { id: true },
   });
 
   // --- Обновление остатков ---------------------------------------------
-  if (warehouseDelta !== 0) {
+  // Приход с новой ценой обновляет текущую цену материала: последняя закупка
+  // и есть актуальная цена. Уже записанные движения при этом не меняются —
+  // их сумма зафиксирована в журнале.
+  const priceChanged = input.type === "RECEIPT" && unitPrice > 0 && unitPrice !== material.price;
+
+  if (warehouseDelta !== 0 || priceChanged) {
     await tx.material.update({
       where: { id: material.id },
-      data: { quantity: warehouseAfter },
+      data: {
+        ...(warehouseDelta !== 0 ? { quantity: warehouseAfter } : {}),
+        ...(priceChanged ? { price: unitPrice } : {}),
+      },
     });
   }
 
-  if (foremanId && foremanDelta !== 0) {
-    await tx.foremanStock.upsert({
-      where: { foremanId_materialId: { foremanId, materialId: material.id } },
-      create: { foremanId, materialId: material.id, quantity: foremanAfter! },
-      update: { quantity: foremanAfter! },
+  if (blockId && blockDelta !== 0) {
+    await tx.blockStock.upsert({
+      where: { blockId_materialId: { blockId, materialId: material.id } },
+      create: { blockId, materialId: material.id, quantity: blockAfter! },
+      update: { quantity: blockAfter! },
     });
   }
 
@@ -173,7 +216,7 @@ export async function recordMovementInTx(
 export async function verifyLedgerConsistency(): Promise<{
   ok: boolean;
   materialMismatches: { id: string; name: string; stored: number; computed: number }[];
-  foremanMismatches: { foremanId: string; materialId: string; stored: number; computed: number }[];
+  blockMismatches: { blockId: string; materialId: string; stored: number; computed: number }[];
 }> {
   const materialMismatches = await db.$queryRaw<
     { id: string; name: string; stored: number; computed: number }[]
@@ -184,20 +227,20 @@ export async function verifyLedgerConsistency(): Promise<{
      WHERE ABS(m.quantity - COALESCE((SELECT SUM(warehouse_delta) FROM stock_movements WHERE material_id = m.id), 0)) > 0.0005
   `;
 
-  const foremanMismatches = await db.$queryRaw<
-    { foremanId: string; materialId: string; stored: number; computed: number }[]
+  const blockMismatches = await db.$queryRaw<
+    { blockId: string; materialId: string; stored: number; computed: number }[]
   >`
-    SELECT fs.foreman_id AS "foremanId", fs.material_id AS "materialId", fs.quantity AS stored,
-           COALESCE((SELECT SUM(foreman_delta) FROM stock_movements sm
-                      WHERE sm.foreman_id = fs.foreman_id AND sm.material_id = fs.material_id), 0) AS computed
-      FROM foreman_stock fs
-     WHERE ABS(fs.quantity - COALESCE((SELECT SUM(foreman_delta) FROM stock_movements sm
-                      WHERE sm.foreman_id = fs.foreman_id AND sm.material_id = fs.material_id), 0)) > 0.0005
+    SELECT bs.block_id AS "blockId", bs.material_id AS "materialId", bs.quantity AS stored,
+           COALESCE((SELECT SUM(block_delta) FROM stock_movements sm
+                      WHERE sm.block_id = bs.block_id AND sm.material_id = bs.material_id), 0) AS computed
+      FROM block_stock bs
+     WHERE ABS(bs.quantity - COALESCE((SELECT SUM(block_delta) FROM stock_movements sm
+                      WHERE sm.block_id = bs.block_id AND sm.material_id = bs.material_id), 0)) > 0.0005
   `;
 
   return {
-    ok: materialMismatches.length === 0 && foremanMismatches.length === 0,
+    ok: materialMismatches.length === 0 && blockMismatches.length === 0,
     materialMismatches,
-    foremanMismatches,
+    blockMismatches,
   };
 }

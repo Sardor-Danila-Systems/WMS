@@ -2,7 +2,14 @@ import { PageHeader } from "@/shared/components/page-header";
 import { getT } from "@/i18n/server";
 import { HistoryFilters } from "@/features/history/history-filters";
 import { MovementsTable } from "@/features/operations/movements-table";
-import { listForemen, listMaterials, listMovements, listProjects, listUsers } from "@/server/queries";
+import {
+  listBlocks,
+  listMaterials,
+  listMovements,
+  listOrganizations,
+  listSuppliers,
+  listUsers,
+} from "@/server/queries";
 import type { MovementFilters } from "@/server/queries";
 import type { MovementType } from "@/types";
 
@@ -34,21 +41,23 @@ export default async function HistoryPage({
   const filters: MovementFilters = {
     type: (value("type") || "all") as MovementType | "all",
     materialId: value("materialId"),
-    foremanId: value("foremanId"),
+    blockId: value("blockId"),
     userId: value("userId"),
-    projectId: value("projectId"),
+    organizationId: value("organizationId"),
+    supplierId: value("supplierId"),
     from: periodToFrom(value("period")),
   };
 
   // Все выборки независимы — запускаем параллельно. Последовательные await
-  // прямо в разметке складывались бы в четыре круга по сети до базы.
-  const [t, movements, materials, foremen, users, projects] = await Promise.all([
+  // прямо в разметке складывались бы в несколько кругов по сети до базы.
+  const [t, movements, materials, blocks, users, organizations, suppliers] = await Promise.all([
     getT(),
     listMovements(filters),
     listMaterials({ includeArchived: true }),
-    listForemen({ includeInactive: true }),
+    listBlocks({ includeInactive: true }),
     listUsers({ includeInactive: true }),
-    listProjects({ includeInactive: true }),
+    listOrganizations({ includeInactive: true }),
+    listSuppliers({ includeInactive: true }),
   ]);
 
   return (
@@ -57,15 +66,17 @@ export default async function HistoryPage({
 
       <HistoryFilters
         materials={materials}
-        foremen={foremen}
+        blocks={blocks}
         users={users}
-        projects={projects}
+        organizations={organizations}
+        suppliers={suppliers}
         current={{
           type: value("type"),
           materialId: value("materialId"),
-          foremanId: value("foremanId"),
+          blockId: value("blockId"),
           userId: value("userId"),
-          projectId: value("projectId"),
+          organizationId: value("organizationId"),
+          supplierId: value("supplierId"),
           period: value("period"),
         }}
       />
@@ -80,15 +91,17 @@ export default async function HistoryPage({
         columns={[
           "type",
           "date",
+          "invoice",
           "material",
           "quantity",
+          "price",
+          "amount",
           "delta",
           "stockAfter",
           "supplier",
-          "foreman",
-          "project",
+          "block",
+          "payment",
           "user",
-          "comment",
         ]}
         pageSize={15}
         emptyMessage={t("history.empty")}

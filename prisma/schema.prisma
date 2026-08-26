@@ -2,11 +2,16 @@
 //
 // Ключевая идея учёта: StockMovement — неизменяемый журнал операций и
 // единственный источник правды. Остатки в Material.quantity и
-// ForemanStock.quantity — производные значения, которые меняются только
+// BlockStock.quantity — производные значения, которые меняются только
 // в одной транзакции с записью движения.
 //
+// Материал движется по замкнутому кругу:
+//   Поставщик --RECEIPT(приход)--> Склад --ISSUE(расход)--> Блок
+//                                    ^                        |
+//                                    +-------RETURN-----------+
+//
 // CHECK-ограничения (quantity >= 0 и т.п.) Prisma в схеме не выражает,
-// поэтому они добавлены SQL-ом в миграции 0002_integrity_checks —
+// поэтому они добавлены SQL-ом в миграции integrity_checks —
 // без них отрицательный остаток защищён только кодом приложения.
 
 generator client {
@@ -23,11 +28,17 @@ enum Role {
   WAREHOUSE_WORKER
 }
 
+/// Приход (от поставщика), расход (в блок) и возврат (из блока на склад).
 enum MovementType {
   RECEIPT
   ISSUE
-  USAGE
   RETURN
+}
+
+/// Способ оплаты из накладной: наличные или перечисление.
+enum PaymentMethod {
+  CASH
+  TRANSFER
 }
 
 model User {
@@ -47,79 +58,101 @@ model User {
   @@map("users")
 }
 
-model Project {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  address   String   @default("")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
+/// Организация — юридическое лицо, на балансе которого числится материал
+/// (например, «Гагарин Авеню»). Соответствует полю «Организация» в 1С.
+model Organization {
+  id      String @id @default(uuid())
+  name    String @unique
+  address String @default("")
+  /// ИНН — нужен для сверки с контрагентами и для выгрузки в 1С.
+  inn     String @default("")
+  phone   String @default("")
+  /// Код этой же организации в 1С. Заполняется при импорте.
+  externalId String?  @unique @map("external_id")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
 
-  foremen   Foreman[]
+  blocks    Block[]
   movements StockMovement[]
 
-  @@map("projects")
+  @@map("organizations")
 }
 
 model Supplier {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  contact   String   @default("")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
+  id      String @id @default(uuid())
+  name    String @unique
+  contact String @default("")
+  phone   String @default("")
+  inn     String @default("")
+  /// Код контрагента в 1С.
+  externalId String?  @unique @map("external_id")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   movements StockMovement[]
 
   @@map("suppliers")
 }
 
-model Foreman {
-  id        String   @id @default(uuid())
-  name      String
-  phone     String   @default("")
-  brigade   String   @default("")
-  projectId String?  @map("project_id")
-  isActive  Boolean  @default(true) @map("is_active")
+/// Блок стройки (A, B, C, D, E) — куда уходит материал со склада.
+/// Заменил бригадиров: учёт ведётся по частям объекта, а не по людям.
+model Block {
+  id   String @id @default(uuid())
+  name String @unique
+  /// Уточнение внутри блока: этаж, секция, участок.
+  description String @default("")
+  /// Порядок показа: A, B, C, D, E — не по алфавиту базы, а как на площадке.
+  sortOrder      Int     @default(0) @map("sort_order")
+  organizationId String? @map("organization_id")
+  externalId     String? @unique @map("external_id")
+  isActive       Boolean @default(true) @map("is_active")
+
   createdAt DateTime @default(now()) @map("created_at")
 
-  project   Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  stock     ForemanStock[]
-  movements StockMovement[]
+  organization Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  stock        BlockStock[]
+  movements    StockMovement[]
 
-  @@index([projectId])
-  @@map("foremen")
+  @@index([organizationId])
+  @@map("blocks")
 }
 
 model Material {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  category  String
-  unit      String
+  id       String @id @default(uuid())
+  name     String @unique
+  category String
+  unit     String
   /// Остаток на складе. Меняется только вместе с записью движения.
-  quantity  Float    @default(0)
+  quantity Float  @default(0)
+  /// Текущая цена за единицу. Меняется вручную и при каждом приходе —
+  /// в движении цена сохраняется отдельно, поэтому история сумм не «плывёт».
+  price     Float    @default(0)
   minStock  Float    @default(0) @map("min_stock")
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  /// Код номенклатуры в 1С — по нему импорт находит уже заведённый материал.
+  externalId String?  @unique @map("external_id")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
-  foremanStock ForemanStock[]
-  movements    StockMovement[]
+  blockStock BlockStock[]
+  movements  StockMovement[]
 
   @@map("materials")
 }
 
-/// Остаток материала на руках у конкретного бригадира.
-model ForemanStock {
-  foremanId  String   @map("foreman_id")
+/// Сколько материала передано в блок и ещё не возвращено на склад.
+model BlockStock {
+  blockId    String   @map("block_id")
   materialId String   @map("material_id")
   quantity   Float    @default(0)
   updatedAt  DateTime @updatedAt @map("updated_at")
 
-  foreman  Foreman  @relation(fields: [foremanId], references: [id], onDelete: Cascade)
+  block    Block    @relation(fields: [blockId], references: [id], onDelete: Cascade)
   material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
 
-  @@id([foremanId, materialId])
+  @@id([blockId, materialId])
   @@index([materialId])
-  @@map("foreman_stock")
+  @@map("block_stock")
 }
 
 /// Журнал движений. Записи никогда не изменяются и не удаляются.
@@ -135,34 +168,48 @@ model StockMovement {
   occurredAt DateTime     @map("occurred_at")
   createdAt  DateTime     @default(now()) @map("created_at")
 
-  userId     String  @map("user_id")
-  foremanId  String? @map("foreman_id")
-  supplierId String? @map("supplier_id")
-  projectId  String? @map("project_id")
+  /// Цена за единицу на момент операции и сумма строки (количество × цена).
+  /// Сумма хранится, а не считается на лету: цена материала меняется,
+  /// а сумма в проведённой накладной измениться не должна.
+  unitPrice Float @default(0) @map("unit_price")
+  amount    Float @default(0)
 
-  vehicleNumber String @default("") @map("vehicle_number")
-  reason        String @default("")
-  comment       String @default("")
+  userId         String  @map("user_id")
+  blockId        String? @map("block_id")
+  supplierId     String? @map("supplier_id")
+  organizationId String? @map("organization_id")
+
+  /// Реквизиты накладной/фактуры.
+  invoiceNumber String         @default("") @map("invoice_number")
+  vehicleNumber String         @default("") @map("vehicle_number")
+  paymentMethod PaymentMethod? @map("payment_method")
+
+  reason  String @default("")
+  comment String @default("")
+
+  /// Идентификатор документа в 1С — защищает импорт от повторной загрузки.
+  externalId String? @unique @map("external_id")
 
   /// Как операция изменила остаток склада: +q, -q или 0.
   warehouseDelta Float  @map("warehouse_delta")
-  /// Как операция изменила остаток у бригадира.
-  foremanDelta   Float  @map("foreman_delta")
+  /// Как операция изменила количество, числящееся за блоком.
+  blockDelta     Float  @map("block_delta")
   /// Остаток склада сразу после операции — «фотография» на момент записи.
   warehouseAfter Float  @map("warehouse_after")
-  foremanAfter   Float? @map("foreman_after")
+  blockAfter     Float? @map("block_after")
 
-  material Material  @relation(fields: [materialId], references: [id], onDelete: Restrict)
-  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
-  foreman  Foreman?  @relation(fields: [foremanId], references: [id], onDelete: Restrict)
-  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  project  Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  material     Material      @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  block        Block?        @relation(fields: [blockId], references: [id], onDelete: Restrict)
+  supplier     Supplier?     @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
   @@index([occurredAt(sort: Desc), seq(sort: Desc)])
   @@index([materialId, occurredAt(sort: Desc)])
-  @@index([foremanId, occurredAt(sort: Desc)])
+  @@index([blockId, occurredAt(sort: Desc)])
   @@index([type, occurredAt(sort: Desc)])
-  @@index([projectId, occurredAt(sort: Desc)])
+  @@index([organizationId, occurredAt(sort: Desc)])
+  @@index([supplierId, occurredAt(sort: Desc)])
   @@index([userId, occurredAt(sort: Desc)])
   @@map("stock_movements")
 }

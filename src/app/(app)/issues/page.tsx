@@ -21,9 +21,19 @@ export default async function Page() {
       />
       <MovementsTable
         movements={movements}
-        columns={["date", "material", "quantity", "stockAfter", "foreman", "project", "issuedBy", "comment"]}
+        columns={[
+          "date",
+          "invoice",
+          "material",
+          "quantity",
+          "price",
+          "amount",
+          "block",
+          "stockAfter",
+          "issuedBy",
+        ]}
         emptyMessage={t("operations.issue.empty")}
-        exportName="vydachi"
+        exportName="rashod"
       />
     </div>
   );

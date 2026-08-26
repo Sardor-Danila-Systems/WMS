@@ -15,32 +15,38 @@ export interface Supplier {
   id: string;
   name: string;
   contact: string;
+  phone: string;
+  inn: string;
   isActive: boolean;
   createdAt: string;
 }
 
-export interface Project {
+/** Организация — юрлицо, на балансе которого числится материал. */
+export interface Organization {
   id: string;
   name: string;
   address: string;
+  inn: string;
+  phone: string;
   isActive: boolean;
   createdAt: string;
 }
 
-export interface Foreman {
+/** Блок стройки (A, B, C, D, E) — получатель материала со склада. */
+export interface Block {
   id: string;
   name: string;
-  phone: string;
-  brigade: string;
-  projectId: string | null;
-  projectName: string | null;
+  description: string;
+  sortOrder: number;
+  organizationId: string | null;
+  organizationName: string | null;
   isActive: boolean;
   createdAt: string;
 }
 
-/** Строка «что сейчас на руках у бригадира». */
-export interface ForemanStockRow {
-  foremanId: string;
+/** Строка «что числится за блоком»: выдано и ещё не возвращено. */
+export interface BlockStockRow {
+  blockId: string;
   materialId: string;
   materialName: string;
   unit: string;

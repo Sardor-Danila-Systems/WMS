@@ -1,27 +1,26 @@
 import "@/lib/server-only";
 
 import { db } from "@/lib/db/client";
-import type { ForemanStockRow } from "@/types";
+import type { BlockStockRow } from "@/types";
 import type { OperationRefData } from "@/features/operations/types";
-import { listForemen, listMaterials, listProjects, listSuppliers } from "./queries";
+import { listBlocks, listMaterials, listOrganizations, listSuppliers } from "./queries";
 
 /**
  * Справочники для форм операций одним набором.
- * Остатки бригадиров загружаются целиком: форма использования и возврата
- * должна показывать доступное количество сразу при выборе бригадира,
- * без дополнительного запроса на сервер.
+ * Остатки блоков загружаются целиком: форма возврата должна показывать
+ * доступное количество сразу при выборе блока, без отдельного запроса.
  */
 export async function getOperationRefData(): Promise<OperationRefData> {
-  const stockRows = await db.foremanStock.findMany({
+  const stockRows = await db.blockStock.findMany({
     where: { quantity: { gt: 0 } },
     include: { material: { select: { name: true, unit: true } } },
     orderBy: { material: { name: "asc" } },
   });
 
-  const foremanStock: Record<string, ForemanStockRow[]> = {};
+  const blockStock: Record<string, BlockStockRow[]> = {};
   for (const row of stockRows) {
-    (foremanStock[row.foremanId] ??= []).push({
-      foremanId: row.foremanId,
+    (blockStock[row.blockId] ??= []).push({
+      blockId: row.blockId,
       materialId: row.materialId,
       materialName: row.material.name,
       unit: row.material.unit,
@@ -32,12 +31,12 @@ export async function getOperationRefData(): Promise<OperationRefData> {
 
   // Справочники не зависят друг от друга — загружаем их параллельно,
   // чтобы форма открывалась за один круг обращений к базе, а не за четыре.
-  const [materials, foremen, projects, suppliers] = await Promise.all([
+  const [materials, blocks, organizations, suppliers] = await Promise.all([
     listMaterials(),
-    listForemen(),
-    listProjects(),
+    listBlocks(),
+    listOrganizations(),
     listSuppliers(),
   ]);
 
-  return { materials, foremen, projects, suppliers, foremanStock };
+  return { materials, blocks, organizations, suppliers, blockStock };
 }

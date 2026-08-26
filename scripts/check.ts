@@ -14,33 +14,40 @@ console.table(
   `
 );
 
-console.log("\nМатериалы на руках у бригадиров (топ-8):");
+console.log("\nМатериалы, числящиеся за блоками (топ-8):");
 console.table(
   await db.$queryRaw<Record<string, unknown>[]>`
-    SELECT f.name AS foreman, m.name AS material, fs.quantity, m.unit
-      FROM foreman_stock fs
-      JOIN foremen f ON f.id = fs.foreman_id
-      JOIN materials m ON m.id = fs.material_id
-     WHERE fs.quantity > 0
-     ORDER BY fs.quantity DESC LIMIT 8
+    SELECT b.name AS block, m.name AS material, bs.quantity, m.unit
+      FROM block_stock bs
+      JOIN blocks b ON b.id = bs.block_id
+      JOIN materials m ON m.id = bs.material_id
+     WHERE bs.quantity > 0
+     ORDER BY bs.quantity DESC LIMIT 8
   `
 );
 
 const negativeStock = await db.material.count({ where: { quantity: { lt: 0 } } });
-const negativeForeman = await db.foremanStock.count({ where: { quantity: { lt: 0 } } });
+const negativeBlock = await db.blockStock.count({ where: { quantity: { lt: 0 } } });
+const negativeAmount = await db.stockMovement.count({ where: { amount: { lt: 0 } } });
 const badQty = await db.stockMovement.count({ where: { quantity: { lte: 0 } } });
 const consistency = await verifyLedgerConsistency();
 
 console.log("\nПроверки целостности:");
 console.table([
   { Проверка: "Отрицательный остаток склада", Нарушений: negativeStock },
-  { Проверка: "Отрицательный остаток бригадира", Нарушений: negativeForeman },
+  { Проверка: "Отрицательный остаток блока", Нарушений: negativeBlock },
   { Проверка: "Движения с количеством <= 0", Нарушений: badQty },
+  { Проверка: "Движения с отрицательной суммой", Нарушений: negativeAmount },
   { Проверка: "Расхождение остатка материала с журналом", Нарушений: consistency.materialMismatches.length },
-  { Проверка: "Расхождение остатка бригадира с журналом", Нарушений: consistency.foremanMismatches.length },
+  { Проверка: "Расхождение остатка блока с журналом", Нарушений: consistency.blockMismatches.length },
 ]);
 
-const ok = negativeStock === 0 && negativeForeman === 0 && badQty === 0 && consistency.ok;
+const ok =
+  negativeStock === 0 &&
+  negativeBlock === 0 &&
+  badQty === 0 &&
+  negativeAmount === 0 &&
+  consistency.ok;
 console.log(ok ? "\n✓ База целостна." : "\n✗ Найдены нарушения целостности.");
 
 await getPrisma().$disconnect();

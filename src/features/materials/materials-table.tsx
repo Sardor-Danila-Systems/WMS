@@ -43,8 +43,6 @@ export function MaterialsTable({
 
   const filtered = useMemo(() => {
     return materials.filter((m) => {
-      // Ищем и по исходному значению, и по переводу: единица хранится как «шт»,
-      // а узбекский пользователь ищет «dona».
       if (
         !matchesSearch(search, [
           m.name,
@@ -60,7 +58,6 @@ export function MaterialsTable({
       if (onlyLowStock && getStockStatus(m.quantity, m.minStock) === "good") return false;
       return true;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [materials, search, category, onlyLowStock, t]);
 
   const numeric = { className: "text-right", headerClassName: "text-right" };

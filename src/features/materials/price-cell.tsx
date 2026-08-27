@@ -11,11 +11,6 @@ import { formatMoney } from "@/lib/format";
 import { useIntlTag, useT } from "@/i18n/client";
 import type { Material } from "@/types";
 
-/**
- * Цена прямо в строке таблицы: клик по карандашу — поле ввода, Enter — сохранение.
- * Цены правят часто и по одной, и открывать ради этого карточку материала
- * было бы лишним шагом.
- */
 export function PriceCell({ material, canEdit }: { material: Material; canEdit: boolean }) {
   const t = useT();
   const locale = useIntlTag();
@@ -23,9 +18,6 @@ export function PriceCell({ material, canEdit }: { material: Material; canEdit: 
   const [value, setValue] = useState(String(material.price || ""));
   const [isPending, setIsPending] = useState(false);
 
-  // Цена могла измениться приходом — пока строку не правят, показываем свежее
-  // значение. Правка во время рендера, а не в эффекте: лишнего прохода нет,
-  // и введённый текст не затирается на полуслове.
   const [knownPrice, setKnownPrice] = useState(material.price);
   if (!editing && knownPrice !== material.price) {
     setKnownPrice(material.price);

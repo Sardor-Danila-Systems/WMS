@@ -227,7 +227,9 @@
     },
     "atBlocks": "Bloklarda",
     "priceColumn": "Narx",
-    "valueColumn": "Qiymati"
+    "valueColumn": "Qiymati",
+    "addShort": "Yangi material",
+    "createInlineHint": "Material darhol nakladnoyga qo‘yiladi. Miqdor o‘sha nakladnoydan olinadi — bu yerda alohida boshlang‘ich qoldiq kerak emas."
   },
   "operations": {
     "material": "Material",
@@ -238,7 +240,7 @@
     "supplier": "Yetkazib beruvchi",
     "vehicle": "Mashina",
     "vehicleNumber": "Mashina raqami",
-    "vehiclePlaceholder": "01 A 123 BC",
+    "vehiclePlaceholder": "30 A123BC",
     "reason": "Sabab",
     "employee": "Xodim",
     "acceptedBy": "Qabul qildi",
@@ -633,6 +635,7 @@
     "notFound": "Yetkazib beruvchilar topilmadi",
     "created": "Yetkazib beruvchi qo'shildi",
     "saved": "Yetkazib beruvchi yangilandi",
-    "all": "Barcha yetkazib beruvchilar"
+    "all": "Barcha yetkazib beruvchilar",
+    "addShort": "Yangi yetkazib beruvchi"
   }
 }

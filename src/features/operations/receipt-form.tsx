@@ -1,20 +1,24 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { Plus } from "lucide-react";
 import type { z } from "zod";
 
 import { createReceipt } from "@/app/actions/movements";
 import { receiptSchema, lineAmount } from "@/lib/validation";
 import { formatMoney, formatQuantity } from "@/lib/format";
 import { useIntlTag, useT } from "@/i18n/client";
+import { useValidationResolver } from "@/i18n/resolver";
 import { useValueTranslator } from "@/i18n/values";
 import { FormField } from "@/shared/components/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
+import { MaterialFormDialog } from "@/features/materials/material-form-dialog";
+import { SupplierFormDialog } from "@/features/suppliers/supplier-form-dialog";
+import type { Material, Supplier } from "@/types";
 import {
   SelectField,
   QuantityInput,
@@ -27,6 +31,23 @@ import type { OperationRefData } from "./types";
 
 type Values = z.input<typeof receiptSchema>;
 
+/**
+ * Справочники приезжают с сервера, а заведённые прямо здесь записи живут
+ * в состоянии формы: ждать перезагрузки страницы, чтобы подставить в поле
+ * только что созданный материал, кладовщику незачем. Совпадения по id
+ * отбрасываем — после обновления страницы запись придёт и с сервера.
+ */
+function mergeCreated<T extends { id: string; name: string }>(
+  fromServer: T[],
+  created: T[],
+  locale: string
+): T[] {
+  const known = new Set(fromServer.map((item) => item.id));
+  return [...fromServer, ...created.filter((item) => !known.has(item.id))].sort((a, b) =>
+    a.name.localeCompare(b.name, locale)
+  );
+}
+
 /** Приход: поставщик → склад. Форма повторяет поля бумажной фактуры. */
 export function ReceiptForm({ data, onSuccess }: { data: OperationRefData; onSuccess: () => void }) {
   const t = useT();
@@ -37,6 +58,18 @@ export function ReceiptForm({ data, onSuccess }: { data: OperationRefData; onSuc
   // Организация обычно одна — подставляем её, чтобы не выбирать каждый раз.
   const onlyOrganization = data.organizations.length === 1 ? data.organizations[0].id : "";
 
+  const [createdMaterials, setCreatedMaterials] = useState<Material[]>([]);
+  const [createdSuppliers, setCreatedSuppliers] = useState<Supplier[]>([]);
+
+  const materials = useMemo(
+    () => mergeCreated(data.materials, createdMaterials, locale),
+    [data.materials, createdMaterials, locale]
+  );
+  const suppliers = useMemo(
+    () => mergeCreated(data.suppliers, createdSuppliers, locale),
+    [data.suppliers, createdSuppliers, locale]
+  );
+
   const {
     register,
     handleSubmit,
@@ -46,7 +79,7 @@ export function ReceiptForm({ data, onSuccess }: { data: OperationRefData; onSuc
     setError,
     formState: { errors },
   } = useForm<Values>({
-    resolver: zodResolver(receiptSchema),
+    resolver: useValidationResolver<Values>(receiptSchema),
     defaultValues: {
       materialId: "",
       quantity: "" as unknown as number,
@@ -62,7 +95,7 @@ export function ReceiptForm({ data, onSuccess }: { data: OperationRefData; onSuc
   });
 
   const materialId = watch("materialId");
-  const material = data.materials.find((m) => m.id === materialId);
+  const material = materials.find((m) => m.id === materialId);
   const quantity = Number(watch("quantity"));
   const rawPrice = watch("unitPrice");
   const unitPrice = rawPrice === "" || rawPrice === undefined ? null : Number(rawPrice);
@@ -91,6 +124,19 @@ export function ReceiptForm({ data, onSuccess }: { data: OperationRefData; onSuc
     onSuccess,
   });
 
+  /** Кнопка «+» рядом с подписью поля. type=button — иначе отправит накладную. */
+  const addButton = (label: string) => (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="-my-1 h-6 gap-1 px-1.5 text-[12.5px] font-medium text-primary"
+    >
+      <Plus className="h-3 w-3" />
+      {label}
+    </Button>
+  );
+
   return (
     <form onSubmit={handleSubmit(submit)} className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -115,7 +161,16 @@ export function ReceiptForm({ data, onSuccess }: { data: OperationRefData; onSuc
           placeholder={t("operations.receipt.supplierPlaceholder")}
           error={errors.supplierId?.message}
           disabled={isPending}
-          options={data.suppliers.map((s) => ({ value: s.id, label: s.name }))}
+          options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
+          action={
+            <SupplierFormDialog
+              trigger={addButton(t("suppliers.addShort"))}
+              onCreated={(created) => {
+                setCreatedSuppliers((prev) => [...prev, created]);
+                setValue("supplierId", created.id);
+              }}
+            />
+          }
         />
 
         <SelectField
@@ -137,11 +192,21 @@ export function ReceiptForm({ data, onSuccess }: { data: OperationRefData; onSuc
         required
         error={errors.materialId?.message}
         disabled={isPending}
-        options={data.materials.map((m) => ({
+        options={materials.map((m) => ({
           value: m.id,
           label: m.name,
           hint: formatQuantity(m.quantity, unitOf(m.unit), locale),
         }))}
+        action={
+          <MaterialFormDialog
+            hideInitialStock
+            trigger={addButton(t("materials.addShort"))}
+            onCreated={(created) => {
+              setCreatedMaterials((prev) => [...prev, created]);
+              setValue("materialId", created.id);
+            }}
+          />
+        }
       >
         {material && (
           <p className="text-[13px] text-muted-foreground">

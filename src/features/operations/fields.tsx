@@ -39,6 +39,7 @@ export function SelectField<T extends FieldValues>({
   error,
   disabled,
   emptyMessage,
+  action,
   children,
 }: {
   control: Control<T>;
@@ -50,6 +51,8 @@ export function SelectField<T extends FieldValues>({
   error?: string;
   disabled?: boolean;
   emptyMessage?: string;
+  /** Кнопка справа от подписи — например, «завести новый». */
+  action?: ReactNode;
   children?: ReactNode;
 }) {
   const t = useT();
@@ -60,7 +63,7 @@ export function SelectField<T extends FieldValues>({
   const itemLabels = Object.fromEntries(options.map((option) => [option.value, option.label]));
 
   return (
-    <FormField label={label} required={required} error={error}>
+    <FormField label={label} required={required} error={error} action={action}>
       <Controller
         control={control}
         name={name}

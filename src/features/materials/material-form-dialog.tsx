@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Pencil, Plus } from "lucide-react";
 import type { z } from "zod";
 
@@ -10,6 +9,7 @@ import { saveMaterial } from "@/app/actions/catalog";
 import { materialSchema } from "@/lib/validation";
 import { CATEGORIES, UNITS } from "@/constants/categories";
 import { useT } from "@/i18n/client";
+import { useValidationResolver } from "@/i18n/resolver";
 import { useValueTranslator } from "@/i18n/values";
 import { FormField } from "@/shared/components/form-field";
 import { Input } from "@/components/ui/input";
@@ -32,9 +32,26 @@ type Values = z.input<typeof materialSchema> & { id?: string };
 export function MaterialFormDialog({
   material,
   hasHistory,
+  hideInitialStock,
+  trigger,
+  onCreated,
 }: {
   material?: Material;
   hasHistory?: boolean;
+  /**
+   * Скрыть начальный остаток. Материал, заведённый прямо из прихода, получает
+   * количество из самой накладной — второе поле здесь привело бы к двойному
+   * оприходованию.
+   */
+  hideInitialStock?: boolean;
+  /** Своя кнопка вместо стандартной — например, «+» рядом с полем в накладной. */
+  trigger?: ReactNode;
+  /**
+   * Материал заведён прямо из формы операции. Возвращаем его целиком, а не
+   * только id: список материалов в открытой форме приходит с сервера, и
+   * ждать его перезагрузки, чтобы подставить только что созданное, незачем.
+   */
+  onCreated?: (created: Material) => void;
 }) {
   const t = useT();
   const unitLabel = useValueTranslator("units");
@@ -50,7 +67,7 @@ export function MaterialFormDialog({
     setError,
     formState: { errors },
   } = useForm<Values>({
-    resolver: zodResolver(materialSchema),
+    resolver: useValidationResolver<Values>(materialSchema),
     defaultValues: {
       name: material?.name ?? "",
       category: material?.category ?? "",
@@ -61,13 +78,31 @@ export function MaterialFormDialog({
     },
   });
 
-  const { submit, isPending } = useActionSubmit<Values>({
+  const { submit, isPending } = useActionSubmit<Values, { id: string }>({
     action: saveMaterial,
     setError,
     successTitle: isEdit ? t("materials.saved") : t("materials.created"),
-    onSuccess: () => {
+    onSuccess: (values, data) => {
       setOpen(false);
       if (!isEdit) reset();
+      if (!isEdit && data?.id && onCreated) {
+        const now = new Date().toISOString();
+        const quantity = Number(values.initialQuantity) || 0;
+        onCreated({
+          id: data.id,
+          name: String(values.name).trim(),
+          category: String(values.category),
+          unit: String(values.unit),
+          quantity,
+          price: Number(values.price) || 0,
+          minStock: Number(values.minStock) || 0,
+          isActive: true,
+          createdAt: now,
+          updatedAt: now,
+          lastReceiptDate: quantity > 0 ? now : null,
+          atBlocks: 0,
+        });
+      }
     },
   });
 
@@ -79,30 +114,44 @@ export function MaterialFormDialog({
         if (!next && !isEdit) reset();
       }}
     >
-      <DialogTrigger
-        render={
-          <Button
-            size="sm"
-            variant={isEdit ? "outline" : "default"}
-            className="gap-1.5"
-            aria-label={isEdit ? t("common.edit") : undefined}
-          />
-        }
-      >
-        {isEdit ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-        {isEdit ? t("common.edit") : t("materials.add")}
-      </DialogTrigger>
+      {trigger ? (
+        <DialogTrigger render={trigger as React.ReactElement} />
+      ) : (
+        <DialogTrigger
+          render={
+            <Button
+              size="sm"
+              variant={isEdit ? "outline" : "default"}
+              className="gap-1.5"
+              aria-label={isEdit ? t("common.edit") : undefined}
+            />
+          }
+        >
+          {isEdit ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+          {isEdit ? t("common.edit") : t("materials.add")}
+        </DialogTrigger>
+      )}
 
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEdit ? t("materials.edit") : t("materials.create")}</DialogTitle>
           <DialogDescription>
-{isEdit ? t("materials.editHint") : t("materials.createHint")}
+            {isEdit
+              ? t("materials.editHint")
+              : hideInitialStock
+                ? t("materials.createInlineHint")
+                : t("materials.createHint")}
           </DialogDescription>
         </DialogHeader>
 
         <form
-          onSubmit={handleSubmit((values) => submit({ ...values, id: material?.id }))}
+          onSubmit={(event) => {
+            // Диалог портализуется в body, но React прокидывает события по дереву
+            // компонентов: без этого submit долетел бы до накладной, из которой
+            // открыт диалог, и запустил бы её проверку раньше времени.
+            event.stopPropagation();
+            void handleSubmit((values) => submit({ ...values, id: material?.id }))(event);
+          }}
           className="space-y-4"
         >
           <FormField label={t("materials.name")} required error={errors.name?.message}>
@@ -171,7 +220,7 @@ export function MaterialFormDialog({
             </FormField>
           </div>
 
-          {!isEdit && (
+          {!isEdit && !hideInitialStock && (
             <FormField label={t("materials.initialQuantity")} error={errors.initialQuantity?.message}>
               <Input
                 type="number"

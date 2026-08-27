@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Pencil, Plus } from "lucide-react";
 import type { z } from "zod";
 
@@ -10,6 +9,7 @@ import { saveOrganization } from "@/app/actions/catalog";
 import { organizationSchema } from "@/lib/validation";
 import { FormField } from "@/shared/components/form-field";
 import { useT } from "@/i18n/client";
+import { useValidationResolver } from "@/i18n/resolver";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,7 +38,7 @@ export function OrganizationFormDialog({ organization }: { organization?: Organi
     setError,
     formState: { errors },
   } = useForm<Values>({
-    resolver: zodResolver(organizationSchema),
+    resolver: useValidationResolver<Values>(organizationSchema),
     defaultValues: {
       name: organization?.name ?? "",
       address: organization?.address ?? "",

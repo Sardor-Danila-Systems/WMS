@@ -2,33 +2,32 @@
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 
 import { createIssue } from "@/app/actions/movements";
 import { issueSchema, lineAmount } from "@/lib/validation";
 import { formatMoney, formatQuantity } from "@/lib/format";
 import { useIntlTag, useT } from "@/i18n/client";
+import { useValidationResolver } from "@/i18n/resolver";
 import { useValueTranslator } from "@/i18n/values";
 import { FormField } from "@/shared/components/form-field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
-import {
-  SelectField,
-  QuantityInput,
-  PriceInput,
-  AmountPreview,
-  AvailableHint,
-  PaymentMethodField,
-} from "./fields";
+import { SelectField, QuantityInput, PriceInput, AmountPreview, AvailableHint } from "./fields";
 import { todayISODate, useActionSubmit } from "./use-operation-form";
 import type { OperationRefData } from "./types";
 
 type Values = z.input<typeof issueSchema>;
 
-/** Расход: склад → блок стройки. */
+/**
+ * Расход: склад → блок стройки.
+ *
+ * Форма намеренно короткая — в блок ушло столько-то, тогда-то. Номер машины
+ * и способ оплаты сюда не относятся: это внутреннее перемещение по площадке,
+ * а не покупка у поставщика. Организация берётся из карточки блока.
+ */
 export function IssueForm({ data, onSuccess }: { data: OperationRefData; onSuccess: () => void }) {
   const t = useT();
   const unitLabel = useValueTranslator("units");
@@ -46,16 +45,13 @@ export function IssueForm({ data, onSuccess }: { data: OperationRefData; onSucce
     setError,
     formState: { errors },
   } = useForm<Values>({
-    resolver: zodResolver(issueSchema),
+    resolver: useValidationResolver<Values>(issueSchema),
     defaultValues: {
       blockId: "",
       materialId: "",
       quantity: "" as unknown as number,
       unitPrice: "",
       organizationId: onlyOrganization,
-      invoiceNumber: "",
-      vehicleNumber: "",
-      paymentMethod: "",
       occurredAt: todayISODate(),
       comment: "",
     },
@@ -173,42 +169,8 @@ export function IssueForm({ data, onSuccess }: { data: OperationRefData; onSucce
         fallbackPrice={material?.price ?? 0}
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <SelectField
-          control={control}
-          name="organizationId"
-          label={t("operations.organization")}
-          placeholder={t("operations.organizationPlaceholder")}
-          error={errors.organizationId?.message}
-          disabled={isPending}
-          options={data.organizations.map((o) => ({ value: o.id, label: o.name }))}
-        />
-
-        <FormField label={t("operations.invoiceNumber")} error={errors.invoiceNumber?.message}>
-          <Input
-            placeholder={t("operations.invoicePlaceholder")}
-            disabled={isPending}
-            {...register("invoiceNumber")}
-          />
-        </FormField>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormField label={t("operations.vehicleNumber")} error={errors.vehicleNumber?.message}>
-          <Input
-            placeholder={t("operations.vehiclePlaceholder")}
-            disabled={isPending}
-            {...register("vehicleNumber")}
-          />
-        </FormField>
-
-        <PaymentMethodField
-          control={control}
-          name="paymentMethod"
-          error={errors.paymentMethod?.message}
-          disabled={isPending}
-        />
-      </div>
+      {/* Организацию не спрашиваем: она уже задана карточкой блока. */}
+      <input type="hidden" {...register("organizationId")} />
 
       <FormField label={t("operations.comment")} error={errors.comment?.message}>
         <Textarea placeholder={t("common.optional")} rows={2} disabled={isPending} {...register("comment")} />

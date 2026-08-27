@@ -51,20 +51,20 @@ export const occurredAtSchema = z
 const idSchema = (message: string) =>
   z.string({ error: message }).trim().min(1, { error: message });
 
-/** Реквизиты накладной, общие для прихода и расхода. */
-const documentFields = {
-  invoiceNumber: z.string().trim().max(64, { error: "validation.invoiceTooLong" }).optional().default(""),
-  vehicleNumber: z.string().trim().max(32, { error: "validation.vehicleTooLong" }).optional().default(""),
-  paymentMethod: paymentMethodSchema,
-  organizationId: z.string().trim().optional().default(""),
-};
-
+/**
+ * Приход оформляется по фактуре поставщика, поэтому несёт её реквизиты.
+ * У расхода их нет: это внутреннее перемещение со склада в блок — ни номера
+ * машины, ни способа оплаты у него не бывает.
+ */
 export const receiptSchema = z.object({
   materialId: idSchema("validation.materialRequired"),
   quantity: quantitySchema,
   unitPrice: priceSchema,
   supplierId: z.string().trim().optional().default(""),
-  ...documentFields,
+  organizationId: z.string().trim().optional().default(""),
+  invoiceNumber: z.string().trim().max(64, { error: "validation.invoiceTooLong" }).optional().default(""),
+  vehicleNumber: z.string().trim().max(32, { error: "validation.vehicleTooLong" }).optional().default(""),
+  paymentMethod: paymentMethodSchema,
   occurredAt: occurredAtSchema,
   comment: z.string().trim().max(500).optional().default(""),
 });
@@ -74,7 +74,7 @@ export const issueSchema = z.object({
   quantity: quantitySchema,
   unitPrice: priceSchema,
   blockId: idSchema("validation.blockRequired"),
-  ...documentFields,
+  organizationId: z.string().trim().optional().default(""),
   occurredAt: occurredAtSchema,
   comment: z.string().trim().max(500).optional().default(""),
 });

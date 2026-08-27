@@ -50,9 +50,9 @@ const PAYMENT_METHODS: PaymentMethod[] = ["CASH", "TRANSFER"];
 const PLATE_LETTERS = ["A", "B", "C", "D", "E", "H", "K", "L", "M", "N", "P", "X", "Z"];
 const PLATE_REGIONS = ["01", "10", "20", "30", "40", "50", "60", "66", "70", "80", "90"];
 
-/** Узбекский номер вида «30 X 124 LA». */
+/** Узбекский номер вида «30 A123BC». */
 function generatePlate(rng: () => number): string {
-  return `${pick(rng, PLATE_REGIONS)} ${pick(rng, PLATE_LETTERS)} ${randInt(rng, 100, 999)} ${pick(
+  return `${pick(rng, PLATE_REGIONS)} ${pick(rng, PLATE_LETTERS)}${randInt(rng, 100, 999)}${pick(
     rng,
     PLATE_LETTERS
   )}${pick(rng, PLATE_LETTERS)}`;

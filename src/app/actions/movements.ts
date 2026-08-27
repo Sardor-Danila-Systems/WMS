@@ -123,9 +123,6 @@ export async function createIssue(formData: FormData): Promise<ActionResult> {
       userId: user.id,
       blockId: parsed.data.blockId,
       organizationId: parsed.data.organizationId,
-      invoiceNumber: parsed.data.invoiceNumber,
-      vehicleNumber: parsed.data.vehicleNumber,
-      paymentMethod: resolvePayment(parsed.data.paymentMethod),
       occurredAt: resolveOccurredAt(parsed.data.occurredAt),
       comment: parsed.data.comment,
     });

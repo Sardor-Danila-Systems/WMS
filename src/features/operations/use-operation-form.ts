@@ -20,12 +20,13 @@ export function todayISODate(): string {
  * Сервер остаётся единственным источником истины по остаткам, поэтому
  * его отказ всегда показывается пользователю дословно.
  */
-export function useActionSubmit<TValues extends FieldValues>(options: {
-  action: (formData: FormData) => Promise<ActionResult<unknown>>;
+export function useActionSubmit<TValues extends FieldValues, TData = unknown>(options: {
+  action: (formData: FormData) => Promise<ActionResult<TData>>;
   setError: UseFormSetError<TValues>;
   successTitle: string;
   successDescription?: (values: TValues) => string | undefined;
-  onSuccess?: () => void;
+  /** Получает отправленные значения и то, что вернул action (например, id). */
+  onSuccess?: (values: TValues, data: TData | undefined) => void;
 }) {
   const t = useT();
   const [isPending, setIsPending] = useState(false);
@@ -52,7 +53,7 @@ export function useActionSubmit<TValues extends FieldValues>(options: {
       toast.success(options.successTitle, {
         description: options.successDescription?.(values),
       });
-      options.onSuccess?.();
+      options.onSuccess?.(values, result.data);
       return true;
     } catch {
       toast.error(t("common.serverUnavailable"));

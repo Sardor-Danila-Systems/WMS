@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Pencil, Plus } from "lucide-react";
 import type { z } from "zod";
 
@@ -10,6 +9,7 @@ import { saveBlock } from "@/app/actions/catalog";
 import { blockSchema } from "@/lib/validation";
 import { FormField } from "@/shared/components/form-field";
 import { useT } from "@/i18n/client";
+import { useValidationResolver } from "@/i18n/resolver";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,7 +49,7 @@ export function BlockFormDialog({
     setError,
     formState: { errors },
   } = useForm<Values>({
-    resolver: zodResolver(blockSchema),
+    resolver: useValidationResolver<Values>(blockSchema),
     defaultValues: {
       name: block?.name ?? "",
       description: block?.description ?? "",

@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Pencil, Plus } from "lucide-react";
 import type { z } from "zod";
 
@@ -10,6 +9,7 @@ import { saveSupplier } from "@/app/actions/catalog";
 import { supplierSchema } from "@/lib/validation";
 import { FormField } from "@/shared/components/form-field";
 import { useT } from "@/i18n/client";
+import { useValidationResolver } from "@/i18n/resolver";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,7 +26,17 @@ import type { Supplier } from "@/types";
 
 type Values = z.input<typeof supplierSchema> & { id?: string };
 
-export function SupplierFormDialog({ supplier }: { supplier?: Supplier }) {
+export function SupplierFormDialog({
+  supplier,
+  trigger,
+  onCreated,
+}: {
+  supplier?: Supplier;
+  /** Своя кнопка вместо стандартной — например, «+» рядом с полем в накладной. */
+  trigger?: ReactNode;
+  /** Поставщик заведён прямо из формы прихода — возвращаем его целиком. */
+  onCreated?: (created: Supplier) => void;
+}) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const isEdit = Boolean(supplier);
@@ -38,7 +48,7 @@ export function SupplierFormDialog({ supplier }: { supplier?: Supplier }) {
     setError,
     formState: { errors },
   } = useForm<Values>({
-    resolver: zodResolver(supplierSchema),
+    resolver: useValidationResolver<Values>(supplierSchema),
     defaultValues: {
       name: supplier?.name ?? "",
       contact: supplier?.contact ?? "",
@@ -48,31 +58,46 @@ export function SupplierFormDialog({ supplier }: { supplier?: Supplier }) {
     },
   });
 
-  const { submit, isPending } = useActionSubmit<Values>({
+  const { submit, isPending } = useActionSubmit<Values, { id: string }>({
     action: saveSupplier,
     setError,
     successTitle: isEdit ? t("suppliers.saved") : t("suppliers.created"),
-    onSuccess: () => {
+    onSuccess: (values, data) => {
       setOpen(false);
       if (!isEdit) reset();
+      if (!isEdit && data?.id && onCreated) {
+        onCreated({
+          id: data.id,
+          name: String(values.name).trim(),
+          contact: String(values.contact ?? ""),
+          phone: String(values.phone ?? ""),
+          inn: String(values.inn ?? ""),
+          isActive: true,
+          createdAt: new Date().toISOString(),
+        });
+      }
     },
   });
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button
-            size="sm"
-            variant={isEdit ? "outline" : "default"}
-            className="gap-1.5"
-            aria-label={isEdit ? t("common.edit") : undefined}
-          />
-        }
-      >
-        {isEdit ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-        {isEdit ? t("common.edit") : t("suppliers.add")}
-      </DialogTrigger>
+      {trigger ? (
+        <DialogTrigger render={trigger as React.ReactElement} />
+      ) : (
+        <DialogTrigger
+          render={
+            <Button
+              size="sm"
+              variant={isEdit ? "outline" : "default"}
+              className="gap-1.5"
+              aria-label={isEdit ? t("common.edit") : undefined}
+            />
+          }
+        >
+          {isEdit ? <Pencil className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+          {isEdit ? t("common.edit") : t("suppliers.add")}
+        </DialogTrigger>
+      )}
 
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
@@ -81,7 +106,13 @@ export function SupplierFormDialog({ supplier }: { supplier?: Supplier }) {
         </DialogHeader>
 
         <form
-          onSubmit={handleSubmit((values) => submit({ ...values, id: supplier?.id }))}
+          onSubmit={(event) => {
+            // Диалог портализуется в body, но React прокидывает события по дереву
+            // компонентов: без этого submit долетел бы до накладной, из которой
+            // открыт диалог, и запустил бы её проверку раньше времени.
+            event.stopPropagation();
+            void handleSubmit((values) => submit({ ...values, id: supplier?.id }))(event);
+          }}
           className="space-y-4"
         >
           <FormField label={t("suppliers.name")} required error={errors.name?.message}>

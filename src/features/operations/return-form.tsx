@@ -2,13 +2,13 @@
 
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
 
 import { createReturn } from "@/app/actions/movements";
 import { returnSchema } from "@/lib/validation";
 import { formatQuantity } from "@/lib/format";
 import { useIntlTag, useT } from "@/i18n/client";
+import { useValidationResolver } from "@/i18n/resolver";
 import { useValueTranslator } from "@/i18n/values";
 import { RETURN_REASONS } from "@/constants/categories";
 import { FormField } from "@/shared/components/form-field";
@@ -42,7 +42,7 @@ export function ReturnForm({ data, onSuccess }: { data: OperationRefData; onSucc
     setError,
     formState: { errors },
   } = useForm<Values>({
-    resolver: zodResolver(returnSchema),
+    resolver: useValidationResolver<Values>(returnSchema),
     defaultValues: {
       blockId: "",
       materialId: "",

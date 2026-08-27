@@ -23,14 +23,14 @@ export default async function Page() {
         movements={movements}
         columns={[
           "date",
-          "invoice",
+          "block",
           "material",
           "quantity",
           "price",
           "amount",
-          "block",
           "stockAfter",
           "issuedBy",
+          "comment",
         ]}
         emptyMessage={t("operations.issue.empty")}
         exportName="rashod"

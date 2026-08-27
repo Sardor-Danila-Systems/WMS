@@ -8,6 +8,8 @@ interface FormFieldProps {
   error?: string;
   /** Пояснение под полем. Скрывается, когда показывается ошибка. */
   hint?: string;
+  /** Кнопка справа от подписи — например, «завести новый». */
+  action?: ReactNode;
   required?: boolean;
   children: ReactNode;
   className?: string;
@@ -18,16 +20,20 @@ export function FormField({
   htmlFor,
   error,
   hint,
+  action,
   required,
   children,
   className,
 }: FormFieldProps) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label htmlFor={htmlFor}>
-        {label}
-        {required && <span className="text-destructive"> *</span>}
-      </Label>
+      <div className="flex min-h-6 items-center justify-between gap-2">
+        <Label htmlFor={htmlFor}>
+          {label}
+          {required && <span className="text-destructive"> *</span>}
+        </Label>
+        {action}
+      </div>
       {children}
       {error ? (
         <p className="text-[13px] text-destructive">{error}</p>
